@@ -1,0 +1,344 @@
+@import "tailwindcss";
+
+:root {
+  --background: #fdfcf8;
+  --foreground: #2d2d2d;
+  --primary: #5a9a7a;
+  --primary-light: #7cb89a;
+  --accent: #f5a962;
+  --warm-bg: #fef9f3;
+  
+  /* 字体回退栈 - 确保中文字符正确渲染 */
+  --font-sans-zh: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "WenQuanYi Micro Hei", "Noto Sans CJK SC", sans-serif;
+  --font-sans-system: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono-system: "SF Mono", "Fira Code", "Consolas", "Monaco", "Courier New", monospace;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans), var(--font-sans-zh), var(--font-sans-system);
+  --font-mono: var(--font-geist-mono), var(--font-mono-system);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: linear-gradient(135deg, #050508 0%, #0a0a15 100%);
+    --foreground: #e5e5e3;
+    --primary: #3b82f6;
+    --primary-light: #60a5fa;
+    --accent: #f97316;
+    --accent-light: #fb923c;
+  }
+}
+
+/* 全局字体渲染优化 */
+html {
+  /* 启用字体连字和字距调整 */
+  font-feature-settings: "kern" 1, "liga" 1;
+  /* 优化字体渲染 */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* 防止字体闪烁 */
+  font-display: swap;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  /* 完整的中文字体回退栈 */
+  font-family: var(--font-geist-sans, var(--font-sans-zh)), 
+               "PingFang SC", 
+               "Hiragino Sans GB", 
+               "Microsoft YaHei", 
+               "WenQuanYi Micro Hei",
+               "Noto Sans CJK SC",
+               system-ui, 
+               -apple-system, 
+               BlinkMacSystemFont, 
+               "Segoe UI", 
+               Roboto, 
+               "Helvetica Neue", 
+               Arial, 
+               sans-serif;
+  /* 优化行高以适应中文 */
+  line-height: 1.6;
+  /* 字间距微调 */
+  letter-spacing: 0.01em;
+}
+
+/* 等宽字体配置 */
+code, pre, kbd, samp {
+  font-family: var(--font-geist-mono, var(--font-mono-system)),
+               "SF Mono",
+               "Fira Code",
+               "Consolas",
+               "Monaco",
+               "Courier New",
+               monospace;
+}
+
+/* 中文排版优化 */
+.chinese-text {
+  /* 中文两端对齐 */
+  text-align: justify;
+  /* 防止标点符号溢出 */
+  text-justify: inter-ideograph;
+  /* 优化CJK字符换行 */
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+/* 修复line-clamp导致的字符截断问题 */
+.line-clamp-1,
+.line-clamp-2,
+.line-clamp-3,
+.line-clamp-4 {
+  /* 确保行高足够 */
+  line-height: 1.5;
+  /* 防止字符被截断 */
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+}
+
+/* 针对不同浏览器的字体渲染优化 */
+@supports (-webkit-overflow-scrolling: touch) {
+  /* iOS设备 */
+  body {
+    -webkit-text-size-adjust: 100%;
+  }
+}
+
+/* Windows系统字体优化 */
+@supports (-ms-ime-align: auto) {
+  body {
+    /* Windows下使用微软雅黑 */
+    font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+  }
+}
+
+/* 安全的文本截断样式 - 防止字符被截断 */
+.text-truncate-safe {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* 确保有足够的行高 */
+  line-height: 1.5;
+  /* 防止字体被压缩 */
+  min-height: 1.5em;
+}
+
+/* 多行文本截断 - 安全版本 */
+.line-clamp-safe-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.5;
+  min-height: 1.5em;
+}
+
+.line-clamp-safe-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.5;
+  min-height: 3em; /* 2行 * 1.5行高 */
+}
+
+.line-clamp-safe-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.5;
+  min-height: 4.5em; /* 3行 * 1.5行高 */
+}
+
+/* 中文文本截断优化 */
+.text-truncate-chinese {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  /* 中文需要更大的行高 */
+  line-height: 1.6;
+  /* 确保CJK字符不会被截断 */
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+/* 防止文字被压缩或拉伸 */
+.preserve-text-metrics {
+  /* 保持字体度量 */
+  font-synthesis: none;
+  /* 防止文字被压缩 */
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* 模块卡片样式修复 */
+.module-card {
+  /* 确保内容不会溢出 */
+  overflow: hidden;
+}
+
+.module-card .module-content {
+  /* 修复文字截断问题 */
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.module-card .module-content button {
+  /* 确保按钮内容可见 */
+  min-height: fit-content;
+  height: auto;
+  /* 允许内容自动撑开 */
+  overflow: visible;
+}
+
+.module-card .module-content button span {
+  /* 确保文字不被截断 */
+  display: block;
+  word-wrap: break-word;
+  word-break: break-word;
+  /* 最小行高确保文字完整显示 */
+  min-height: 1.5em;
+  /* 防止文字被裁剪 */
+  overflow: visible;
+}
+
+/* 内容预览弹窗样式 */
+.content-preview-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  padding: 1rem;
+}
+
+.content-preview-modal .modal-content {
+  max-width: 600px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+  background: white;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  animation: modal-appear 0.2s ease-out;
+}
+
+@keyframes modal-appear {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.3s ease-out forwards;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.btn-primary {
+  @apply px-6 py-3 bg-gradient-to-r from-[#5a9a7a] to-[#4a8a6a] text-white font-semibold rounded-2xl shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-300;
+}
+
+.btn-secondary {
+  @apply px-5 py-2.5 bg-white text-[#5a9a7a] border-2 border-[#5a9a7a] font-medium rounded-xl hover:bg-[#5a9a7a]/5 transition-all duration-300;
+}
+
+.card-warm {
+  @apply bg-white rounded-2xl shadow-md border border-amber-100/50 hover:shadow-xl transition-all duration-300;
+}
+
+.hero-gradient {
+  background: linear-gradient(135deg, #fdfbf7 0%, #f5f9f6 50%, #faf4f4 100%);
+}
+
+/* 自定义滚动条样式 */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.4);
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(148, 163, 184, 0.6);
+}
+
+/* 深色主题滚动条 */
+@media (prefers-color-scheme: dark) {
+  .scrollbar-thin {
+    scrollbar-color: rgba(71, 85, 105, 0.5) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: rgba(71, 85, 105, 0.5);
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(71, 85, 105, 0.7);
+  }
+}
+
+/* 深色主题下的样式 */
+@media (prefers-color-scheme: dark) {
+  .btn-primary {
+    @apply bg-gradient-to-r from-[#3b82f6] to-[#2563eb] text-white;
+  }
+  
+  .btn-secondary {
+    @apply bg-[#1a1a2e] text-[#60a5fa] border-2 border-[#3b82f6] hover:bg-[#3b82f6]/10;
+  }
+  
+  .card-warm {
+    @apply bg-[#1a1a2e] border border-[#3b82f6]/30 hover:shadow-xl hover:shadow-[#3b82f6]/20;
+  }
+  
+  .hero-gradient {
+    background: linear-gradient(135deg, #050508 0%, #0a0a15 50%, #1a1a2e 100%);
+  }
+}
