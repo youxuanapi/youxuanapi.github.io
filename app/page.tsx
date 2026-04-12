@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useToast } from './components/Toast';
-import { ModuleRefinement } from './components/module-refinement';
+import { ModuleRefinement } from './components/ModuleRefinement';
 import WritingAgentUI from './components/writing-agent/WritingAgentUI';
 import { useEditorStore } from './store/editorStore';
 
@@ -757,12 +757,13 @@ export default function Page() {
   // 同步 API 配置到 editorStore
   useEffect(() => {
     // 从 editorStore 初始化
-    if (editorStore.apiConfig) {
+    const config = editorStore.apiConfig;
+    if (config) {
       setState(prev => ({
         ...prev,
-        apiBaseUrl: editorStore.apiConfig.apiBaseUrl || prev.apiBaseUrl,
-        apiKey: editorStore.apiConfig.apiKey || prev.apiKey,
-        model: editorStore.apiConfig.model || prev.model,
+        apiBaseUrl: config.apiBaseUrl || prev.apiBaseUrl,
+        apiKey: config.apiKey || prev.apiKey,
+        model: config.model || prev.model,
       }));
     }
   }, []); // 只在初始化时执行一次
@@ -1572,7 +1573,7 @@ export default function Page() {
               <Card theme={theme} className="overflow-hidden h-full">
                 <div className={`p-4 border-b ${t.cardBorder} flex items-center justify-between`}>
                   <div>
-                    <h2 className={`text-lg font-bold ${t.text}`}>AI工具库</h2>
+                    <h2 className={`text-lg font-bold ${t.text}`}>创作风暴</h2>
                     <p className={`${t.textSecondary} text-xs`}>持续更新，打造最强AI副业工具箱</p>
                   </div>
                   <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${theme === 'blue' ? 'bg-blue-50 border-blue-200' : 'bg-blue-100 border-blue-200'}`}>

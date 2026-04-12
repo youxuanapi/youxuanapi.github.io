@@ -1,7 +1,7 @@
 'use client';
 
-import WritingAgentUI from '../../components/writing-agent/WritingAgentUI';
-import ApiConfig from '../../components/ApiConfig';
+import WritingAgentUI from '../components/writing-agent/WritingAgentUI';
+import ApiConfig from '../components/ApiConfig';
 import { useState } from 'react';
 
 export default function WritingAgentPage() {

@@ -24,6 +24,7 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
     updateParagraph,
     setPersona,
     addPersona,
+    deletePersona,
     setRunning,
     setProgress,
     setError,
@@ -43,6 +44,10 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
   const [isCreatingPersona, setIsCreatingPersona] = useState(false);
   const [generationLogs, setGenerationLogs] = useState<string[]>([]);
   const [copied, setCopied] = useState(false);
+  const [isAntiAiMode, setIsAntiAiMode] = useState(false);
+  const [referenceSkeleton, setReferenceSkeleton] = useState('');
+  const [showSkeletonPanel, setShowSkeletonPanel] = useState(false);
+  const [showPersonaList, setShowPersonaList] = useState(false);
   const logsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -181,7 +186,7 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
 
     for (let i = 0; i < sections.length; i++) {
       const section = sections[i];
-      const sectionTitle = section.title || section.corePosition || `段落 ${i + 1}`;
+      const sectionTitle = section.title || `段落 ${i + 1}`;
       setGenerationLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] 正在生成第 ${i + 1}/${sections.length} 段: ${sectionTitle}`]);
 
       try {
@@ -200,6 +205,8 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
             apiBaseUrl: apiConfig.apiBaseUrl,
             apiKey: apiConfig.apiKey,
             model: apiConfig.model,
+            isAntiAiMode,
+            referenceSkeleton,
           }),
         });
 
@@ -240,6 +247,43 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error('复制失败:', err);
+    }
+  };
+
+  const handleHumanizeOptimizer = async () => {
+    if (!currentTask?.finalDraft) return;
+    if (!apiConfig?.apiBaseUrl || !apiConfig?.apiKey || !apiConfig?.model) {
+      setError('请先配置API');
+      return;
+    }
+
+    setRunning(true);
+    setGenerationLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] 正在深度去AI味...`]);
+
+    try {
+      const response = await fetch('/api/writing-agent/humanize-optimizer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: currentTask.finalDraft,
+          apiBaseUrl: apiConfig.apiBaseUrl,
+          apiKey: apiConfig.apiKey,
+          model: apiConfig.model,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.optimizedText) {
+        setFinalDraft(data.optimizedText);
+        setGenerationLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] 深度去AI味完成！`]);
+      } else {
+        setGenerationLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] 去AI味失败: ${data.error || '未知错误'}`]);
+      }
+    } catch (err) {
+      setGenerationLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] 去AI味异常: ${err instanceof Error ? err.message : '未知错误'}`]);
+    } finally {
+      setRunning(false);
     }
   };
 
@@ -348,28 +392,127 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
                   </div>
                 ) : (
                   <div className="relative">
-                    <select
-                      value={selectedPersonaId || ''}
-                      onChange={(e) => setSelectedPersonaId(e.target.value || null)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                      disabled={isRunning}
-                    >
-                      <option value="">不使用专属人格</option>
-                      {personas.map((p) => {
-                        const displayDesc = p.description 
-                          ? (p.description.length > 30 ? p.description.slice(0, 30) + '...' : p.description)
-                          : '无描述';
-                        return (
-                          <option 
-                            key={p.id} 
-                            value={p.id}
-                            title={`${p.name} - ${p.description || '无描述'}`}
+                    <div className="space-y-2">
+                      <select
+                        value={selectedPersonaId || ''}
+                        onChange={(e) => setSelectedPersonaId(e.target.value || null)}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                        disabled={isRunning}
+                      >
+                        <option value="">不使用专属人格</option>
+                        {personas.map((p) => {
+                          const displayDesc = p.description 
+                            ? (p.description.length > 30 ? p.description.slice(0, 30) + '...' : p.description)
+                            : '无描述';
+                          const createDate = p.createdAt ? new Date(p.createdAt).toLocaleString('zh-CN') : '未知';
+                          return (
+                            <option 
+                              key={p.id} 
+                              value={p.id}
+                              title={`${p.name} - ${p.description || '无描述'} - 创建日期: ${createDate}`}
+                            >
+                              {p.name} - {displayDesc}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      
+                      {personas.length > 0 && (
+                        <div className="mt-2">
+                          <button
+                            onClick={() => setShowPersonaList(!showPersonaList)}
+                            className="text-sm text-blue-600 hover:text-blue-700 flex items-center"
                           >
-                            {p.name} - {displayDesc}
-                          </option>
-                        );
-                      })}
-                    </select>
+                            管理已创建的 {personas.length} 个人格
+                          </button>
+                          
+                          {showPersonaList && (
+                            <div className="mt-2 space-y-2">
+                              {personas.map((p) => {
+                                const createDate = p.createdAt ? new Date(p.createdAt).toLocaleString('zh-CN') : '未知';
+                                return (
+                                  <div key={p.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
+                                    <div>
+                                      <div className="font-medium">{p.name}</div>
+                                      <div className="text-xs text-gray-500">
+                                        {p.description || '无描述'} • 创建日期: {createDate}
+                                      </div>
+                                    </div>
+                                    <button
+                                      onClick={() => {
+                                        if (confirm('确定要删除这个写作人格吗？')) {
+                                          deletePersona(p.id);
+                                          if (selectedPersonaId === p.id) {
+                                            setSelectedPersonaId(null);
+                                          }
+                                        }
+                                      }}
+                                      disabled={isRunning}
+                                      className="text-red-500 hover:text-red-700"
+                                      title="删除人格"
+                                    >
+                                      🗑️
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <div className="flex items-center gap-3 mb-3">
+                  <input
+                    type="checkbox"
+                    id="antiAiMode"
+                    checked={isAntiAiMode}
+                    onChange={(e) => setIsAntiAiMode(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                    disabled={isRunning}
+                  />
+                  <label htmlFor="antiAiMode" className="text-sm font-medium text-gray-700">
+                    开启防朱雀AI检测模式 (Anti-AI Mode)
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500 mb-4 ml-7">
+                  开启后，系统将故意植入人类真实的打字瑕疵（包含轻微语病、错别字等）以绕过机器检测。
+                </p>
+
+                <div className="flex items-center justify-between mb-2">
+                  <button
+                    onClick={() => setShowSkeletonPanel(!showSkeletonPanel)}
+                    className="text-sm text-blue-600 hover:text-blue-700"
+                  >
+                    {showSkeletonPanel ? '收起' : '上传 0% AI率人类参考文（选填）'}
+                  </button>
+                </div>
+
+                {showSkeletonPanel && (
+                  <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                    <p className="text-sm text-gray-600 mb-2">
+                      贴入一篇人类写的日常流水账，AI 将完全保留它的标点符号和句法骨架进行"换皮"生成，这是目前降重最稳妥的方法。
+                    </p>
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-3">
+                      <p className="text-xs text-yellow-700">
+                        <strong>💡 使用提示：</strong><br />
+                        • 推荐使用<strong>跨界参考骨架</strong>（如修自行车的流水账写情感文）<br />
+                        • 避免使用<strong>同主题文章</strong>作为参考（会导致洗稿）<br />
+                        • 参考文越日常、越口语化效果越好
+                      </p>
+                    </div>
+                    <textarea
+                      value={referenceSkeleton}
+                      onChange={(e) => setReferenceSkeleton(e.target.value)}
+                      placeholder="粘贴人类参考文本..."
+                      rows={6}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      disabled={isRunning}
+                    />
                   </div>
                 )}
               </div>
@@ -458,6 +601,20 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
                       <h3 className="font-medium text-gray-900">{currentTask.outline.title || '大纲'}</h3>
                       <p className="text-sm text-gray-600">{currentTask.outline.theme || ''}</p>
                     </div>
+                    <div className="p-4">
+                      {currentTask.outline.sections && currentTask.outline.sections.map((section, index) => (
+                        <div key={section.id || index} className="mb-4 pb-4 border-b border-gray-100 last:border-b-0 last:mb-0 last:pb-0">
+                          <div className="font-medium text-gray-800 mb-2">{section.title || `段落 ${index + 1}`}</div>
+                          {section.keyPoints && section.keyPoints.length > 0 && (
+                            <ul className="list-disc list-inside text-sm text-gray-600 space-y-1">
+                              {section.keyPoints.map((point, i) => (
+                                <li key={i}>{point}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -482,17 +639,26 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
             <div className="bg-white rounded-lg shadow-sm p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-gray-900">生成结果</h2>
-                <button
-                  onClick={handleCopy}
-                  className={cn(
-                    'px-4 py-2 text-sm rounded-lg transition-all duration-200',
-                    copied 
-                      ? 'bg-green-100 text-green-700' 
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  )}
-                >
-                  {copied ? '已复制!' : '复制全文'}
-                </button>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleHumanizeOptimizer}
+                    disabled={isRunning}
+                    className="px-4 py-2 text-sm rounded-lg bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    🔨 深度去 AI 味
+                  </button>
+                  <button
+                    onClick={handleCopy}
+                    className={cn(
+                      'px-4 py-2 text-sm rounded-lg transition-all duration-200',
+                      copied 
+                        ? 'bg-green-100 text-green-700' 
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    )}
+                  >
+                    {copied ? '已复制!' : '复制全文'}
+                  </button>
+                </div>
               </div>
               <div className="prose prose-blue max-w-none">
                 {currentTask.finalDraft.split('\n\n').map((paragraph, index) => (

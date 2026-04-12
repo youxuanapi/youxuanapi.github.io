@@ -207,12 +207,19 @@ function buildPersonaFromAnalysis(
   userId: string,
   trackType: string
 ): WritingPersonaV2 {
-  const now = new Date().toISOString();
+  const now = new Date();
+  const nowISO = now.toISOString();
+  const timestamp = now.toLocaleString('zh-CN', { 
+    month: '2-digit', 
+    day: '2-digit', 
+    hour: '2-digit', 
+    minute: '2-digit' 
+  });
   
   return {
     id: generateId(),
     userId,
-    name: (analysis.name as string) || '专属写作人格',
+    name: (analysis.name as string) || `专属写作人格 (${timestamp})`,
     description: (analysis.description as string) || '基于样本分析生成',
     trackType,
     
@@ -333,8 +340,8 @@ function buildPersonaFromAnalysis(
       quoteRule: (analysis.fixedExpressionRules as any)?.quoteRule || '每篇仅用1-2次，仅用于核心观点佐证',
     },
 
-    createdAt: now,
-    updatedAt: now,
+    createdAt: nowISO,
+    updatedAt: nowISO,
   };
 }
 

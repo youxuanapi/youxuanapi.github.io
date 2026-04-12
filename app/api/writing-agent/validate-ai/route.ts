@@ -13,7 +13,13 @@ export async function POST(req: Request) {
     }
 
     const result = await validateAIParagraph(paragraph, userStyleExemptions);
-    return NextResponse.json(result);
+    return NextResponse.json({
+      isPass: result.isPass,
+      comprehensiveAiScore: result.score,
+      issues: result.risks,
+      modifyRule: result.risks.map(r => r.suggestion).join('; '),
+      humanFlaws: result.humanFlaws
+    });
   } catch (error) {
     console.error("Validation Error:", error);
     return NextResponse.json({ error: "INTERNAL_SERVER_ERROR" }, { status: 500 });
