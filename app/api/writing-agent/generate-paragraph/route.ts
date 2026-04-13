@@ -7,7 +7,7 @@ const MAX_MODIFY_COUNT = 5;
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { taskId, paragraphIndex, section, previousContent, persona, outline, researchReport, topic, apiBaseUrl, apiKey, model, isAntiAiMode = false, referenceSkeleton = '' } = body;
+    const { taskId, paragraphIndex, section, previousContent, persona, outline, researchReport, topic, customInputs, apiBaseUrl, apiKey, model, isAntiAiMode = false, referenceSkeleton = '' } = body;
 
     if (!taskId || paragraphIndex === undefined || !section) {
       return NextResponse.json({ error: '缺少必要参数' }, { status: 400 });
@@ -17,6 +17,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '请先配置API' }, { status: 400 });
     }
 
+    const sections = outline?.sections || [];
+    const totalParagraphs = sections.length;
+    
     const result = await generateParagraphWithValidation(
       section,
       previousContent || '',
@@ -24,6 +27,9 @@ export async function POST(request: NextRequest) {
       outline,
       researchReport,
       topic,
+      customInputs,
+      paragraphIndex,
+      totalParagraphs,
       apiBaseUrl,
       apiKey,
       model,
@@ -53,6 +59,9 @@ async function generateParagraphWithValidation(
   outline: Record<string, unknown>,
   researchReport: Record<string, unknown>,
   topic: string,
+  customInputs: any,
+  paragraphIndex: number,
+  totalParagraphs: number,
   apiBaseUrl: string,
   apiKey: string,
   model: string,
@@ -72,6 +81,9 @@ async function generateParagraphWithValidation(
       outline || {},
       researchReport || {},
       topic,
+      customInputs,
+      paragraphIndex,
+      totalParagraphs,
       apiBaseUrl,
       apiKey,
       model,
@@ -94,6 +106,9 @@ async function generateParagraphWithValidation(
           outline || {},
           researchReport || {},
           topic,
+          customInputs,
+          paragraphIndex,
+          totalParagraphs,
           apiBaseUrl,
           apiKey,
           model,
@@ -161,6 +176,9 @@ async function generateContent(
   outline: Record<string, unknown>,
   researchReport: Record<string, unknown>,
   topic: string,
+  customInputs: any,
+  paragraphIndex: number,
+  totalParagraphs: number,
   apiBaseUrl: string,
   apiKey: string,
   model: string,
@@ -185,27 +203,33 @@ ${referenceSkeleton}
 当前段落：${JSON.stringify(section, null, 2)}
 直接输出正文。`;
     } else {
-      systemPrompt = `你现在是一个清醒、接地气、用手机备忘录记录婚姻和生活感悟的普通网友。
-你的核心任务是写出符合主题要求的情感/生活文章，同时必须【绝对伪装成真实人类，骗过朱雀AI检测器】。
+      const isFirstHalf = paragraphIndex < Math.floor(totalParagraphs / 2);
+      const isLastParagraph = paragraphIndex === totalParagraphs - 1;
+      const isClimaxParagraph = !isFirstHalf && !isLastParagraph;
 
-【最高业务指令：必须紧扣主题！】
-绝对不允许偏离用户给定的主题！你要用最真实的市井心态、最琐碎的生活场景来聊这个话题。
+      let phaseSpecificPrompt = '';
+      if (isFirstHalf) {
+        phaseSpecificPrompt = `【当前阶段：背景与事件引入】
+- 只允许围绕大纲展开
+- 绝对禁止提及"颗粒度细节"和"反常识升华"内容
+- 保持线性叙事推进`;
+      } else if (isClimaxParagraph) {
+        phaseSpecificPrompt = `【当前阶段：高潮段落】
+- 请将以下细节进行极具画面感和情绪张力的扩写，融入本段叙事中
+- 颗粒度细节：${customInputs?.detail || '无'}
+- 重点：把这个画面/细节写活，要有代入感`;
+      } else if (isLastParagraph) {
+        phaseSpecificPrompt = `【当前阶段：结尾升华】
+- 以此金句作为全篇的收尾，语气要冷酷清醒，直接收尾，不要再重复前文的故事
+- 反常识升华：${customInputs?.sublimation || '无'}
+- 重点：说完就停，不要画蛇添足`;
+      }
 
-【一、 绝对禁用的词汇黑名单（防AI高频词，出现即作废）】
-严禁出现：烟火气、仪式感、治愈、时光、岁月、抽离、双向奔赴、情绪价值、底层逻辑、共鸣、探索、不辜负、岁月静好、不可或缺、在这个瞬息万变的时代。必须用干瘪、现实的大白话替代。
+      systemPrompt = `你是用手机备忘录吐槽的真实网友。核心禁忌：绝对不能重复前文出现过的场景和比喻！必须推进叙事！为了真实，请保留口语化、包含一逗到底的超长句，并将'哪怕'写成'那怕'，动词前的'地'写成'的'。
 
-【二、 必须植入的"人类生理性瑕疵"（过检核心）】
-1. 情绪化宣泄长句（极其重要）：文章中必须出现至少一句"一逗到底"的超长吐槽句或场景描述（包含至少6个逗号，不加句号）。主语要在"你"和"生活琐事/对方"之间自然横跳，用来表达憋屈或看透了的现实情绪。（参考句式：你下班累得半死回到家看到那堆没洗的碗那个瞬间真的气就不打一处来，你也懒得说啥了干脆自己进屋躺着...）
-2. 真实口语前缀：在引出重要结论前，加上"倒不是没有啥特别原因"、"说实话"、"其实吧"、"反正不管咋样"这类废话前缀。
-3. 保留输入法错别字：文中凡是用到"哪怕"的地方，强制写成"那怕"。动词前的"地"（如慢慢地）全部强制写成"的"。
+${phaseSpecificPrompt}`;
 
-【三、 表达方式约束】
-绝对不要写高高在上的说理，不要引用名人名言。用具体的动作（比如算计柴米油盐、扔垃圾、看手机）来替代虚无缥缈的形容词。没有Markdown标题和加粗，纯文本自然段。`;
-      
-      userPrompt = `请直接开始写这段文字。
-【核心检查清单】：是否紧扣主题？是否避开了禁用鸡汤词？是否包含了错别字(那怕)？是否有一逗到底的超长情绪宣泄句？
-
-【当前要写的主题和要求】：${topic}
+      userPrompt = `【当前要写的主题和要求】：${topic}
 【本段具体内容约束】：${JSON.stringify(section, null, 2)}
 【前文回顾（顺着往下写）】：${previousContent || '（这是第一段）'}
 
@@ -222,6 +246,28 @@ ${referenceSkeleton}
     
     const flawTypes = (safePersona as any)?.naturalFlawLibrary?.flawTypes || ['口语化重复', '思维跳跃', '短句留白', '即兴补充'];
     const flawCount = Math.max(1, Math.floor(flawTypes.length / 2));
+
+    const isFirstHalf = paragraphIndex < Math.floor(totalParagraphs / 2);
+    const isLastParagraph = paragraphIndex === totalParagraphs - 1;
+    const isClimaxParagraph = !isFirstHalf && !isLastParagraph;
+
+    let phaseSpecificPrompt = '';
+    if (isFirstHalf) {
+      phaseSpecificPrompt = `【当前阶段：背景与事件引入】
+- 只允许围绕大纲展开
+- 绝对禁止提及"颗粒度细节"和"反常识升华"内容
+- 保持线性叙事推进`;
+    } else if (isClimaxParagraph) {
+      phaseSpecificPrompt = `【当前阶段：高潮段落】
+- 请将以下细节进行极具画面感和情绪张力的扩写，融入本段叙事中
+- 颗粒度细节：${customInputs?.detail || '无'}
+- 重点：把这个画面/细节写活，要有代入感`;
+    } else if (isLastParagraph) {
+      phaseSpecificPrompt = `【当前阶段：结尾升华】
+- 以此金句作为全篇的收尾，语气要冷酷清醒，直接收尾，不要再重复前文的故事
+- 反常识升华：${customInputs?.sublimation || '无'}
+- 重点：说完就停，不要画蛇添足`;
+    }
     
     systemPrompt = `你是一位完全复刻用户专属写作人格的资深写作者，正在逐段创作一篇高质量原创爆款文章，同时天然规避AI生成特征。
 你的核心任务是：必须100%严格遵循用户的固定写作范式，严格遵守所有约束规则，100%复刻用户的写作风格，内生用户原生的真人写作特征，生成符合大纲要求、与前文自然衔接、无AI痕迹、有温度、有价值的自然段落，绝对禁止模型自由发挥。
@@ -235,8 +281,13 @@ ${JSON.stringify(fixedNarrative, null, 2)}
 【用户固定表达规则（必须严格遵循）】
 ${JSON.stringify(fixedExpression, null, 2)}
 
+【全局防重约束（极其重要）】
+【极其重要】严禁在不同段落中重复使用相同的比喻、场景描写和中心句！前文已经写过的细节，后文绝对不可再次提及，必须保持人类写作的线性推进感。
+
+${phaseSpecificPrompt}
+
 【输出要求】直接输出完整段落，禁止其他内容。`;
-    
+
     userPrompt = `请基于以下信息，生成当前段落：
 【主题】${topic}
 【当前段落约束】${JSON.stringify(section, null, 2)}

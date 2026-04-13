@@ -9,7 +9,7 @@ function generateId(): string {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { topic, requirements, apiBaseUrl, apiKey, model, persona, styleData } = body;
+    const { topic, requirements, customInputs, apiBaseUrl, apiKey, model, persona, styleData } = body;
     const actualPersona = persona || styleData;
 
     if (!topic) {
@@ -21,8 +21,8 @@ export async function POST(request: NextRequest) {
     }
 
     const taskId = generateId();
-    const researchReport = await performDeepResearch(topic, requirements, apiBaseUrl, apiKey, model, actualPersona);
-    const outline = await generateOutlineV2(topic, requirements, researchReport, apiBaseUrl, apiKey, model, actualPersona);
+    const researchReport = await performDeepResearch(topic, requirements, customInputs, apiBaseUrl, apiKey, model, actualPersona);
+    const outline = await generateOutlineV2(topic, requirements, customInputs, researchReport, apiBaseUrl, apiKey, model, actualPersona);
 
     const task: WritingTaskV2 = {
       id: taskId,
@@ -66,6 +66,7 @@ export async function POST(request: NextRequest) {
 async function performDeepResearch(
   topic: string,
   requirements: string,
+  customInputs: any,
   apiBaseUrl: string,
   apiKey: string,
   model: string,
@@ -110,10 +111,16 @@ async function performDeepResearch(
 3.  所有输出必须可落地、可执行，差异化角度必须有明确的落地路径，禁止空泛描述
 4.  禁止输出任何JSON之外的内容，禁止添加解释、说明、备注`;
 
+    const customInputsText = customInputs ? `
+【用户自定义核心冲突（仅用于大纲生成）】
+- 直击痛点：${customInputs.painPoint || '无'}
+
+【特别强调】请基于这个核心冲突，生成一个起承转合的4-5段式大纲。不要在此时剧透具体细节和结尾金句。` : '';
+
     const userPrompt = `请基于以下信息，完成写作主题的深度调研，严格遵守System Prompt的所有要求。
 
 【写作主题】${topic}
-【用户写作需求】${requirements || '无'}
+【用户写作需求】${requirements || '无'}${customInputsText}
 【用户专属写作人格】${JSON.stringify(persona || {}, null, 2)}
 【用户选定文章赛道】${persona?.trackType || '情感文'}
 
@@ -173,6 +180,7 @@ async function performDeepResearch(
 async function generateOutlineV2(
   topic: string,
   requirements: string,
+  customInputs: any,
   researchReport: ResearchReportV2,
   apiBaseUrl: string,
   apiKey: string,
@@ -242,10 +250,17 @@ ${JSON.stringify(fixedExpression, null, 2)}
 5.  必须明确标注每个段落属于用户固定结构的哪一部分
 6.  禁止输出任何JSON之外的内容，禁止添加解释、说明、备注`;
 
+    const customInputsText = customInputs ? `
+【用户自定义灵魂内容（必须100%融入大纲和正文）】
+- 直击痛点：${customInputs.painPoint || '无'}
+- 颗粒度细节：${customInputs.detail || '无'}
+- 反常识升华：${customInputs.sublimation || '无'}
+【特别强调】以上用户自定义内容必须作为文章的"灵魂"，100%融入到大纲设计中，确保文章有血有肉！` : '';
+
     const userPrompt = `请基于以下信息，生成文章大纲，必须100%严格遵循用户的固定写作范式，这是不可违反的红线，严格遵守System Prompt的所有要求。
 
 【写作主题】${topic}
-【用户写作需求】${requirements || '无'}
+【用户写作需求】${requirements || '无'}${customInputsText}
 【用户专属写作人格（含固定范式）】${JSON.stringify(safePersona, null, 2)}
 【深度调研结果】${JSON.stringify(researchReport, null, 2)}
 【用户选定文章赛道】${safePersona.trackType || '情感文'}
@@ -314,7 +329,7 @@ ${JSON.stringify(fixedExpression, null, 2)}
       };
     }
 
-    return getDefaultOutline(topic, safePersona, researchReport);
+    return getDefaultOutline(topic, safePersona, researchReport, customInputs);
   } catch (error) {
     console.error('大纲生成失败，使用默认大纲:', error);
     return getDefaultOutline(topic, safePersona, researchReport);
@@ -324,7 +339,8 @@ ${JSON.stringify(fixedExpression, null, 2)}
 function getDefaultOutline(
   topic: string,
   persona: Record<string, unknown>,
-  researchReport: ResearchReportV2
+  researchReport: ResearchReportV2,
+  customInputs: any
 ): OutlineV2 {
   const safePersona = persona || {};
   

@@ -38,27 +38,22 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
 
   const [topic, setTopic] = useState('');
   const [requirements, setRequirements] = useState('');
+  const [painPoint, setPainPoint] = useState('');
+  const [detail, setDetail] = useState('');
+  const [sublimation, setSublimation] = useState('');
   const [selectedPersonaId, setSelectedPersonaId] = useState<string | null>(null);
   const [showPersonaPanel, setShowPersonaPanel] = useState(false);
   const [sampleTexts, setSampleTexts] = useState<string[]>(['']);
   const [isCreatingPersona, setIsCreatingPersona] = useState(false);
-  const [generationLogs, setGenerationLogs] = useState<string[]>([]);
   const [copied, setCopied] = useState(false);
   const [isAntiAiMode, setIsAntiAiMode] = useState(false);
   const [referenceSkeleton, setReferenceSkeleton] = useState('');
   const [showSkeletonPanel, setShowSkeletonPanel] = useState(false);
   const [showPersonaList, setShowPersonaList] = useState(false);
-  const logsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadLocalPersonas();
   }, [loadLocalPersonas]);
-
-  useEffect(() => {
-    if (logsRef.current) {
-      logsRef.current.scrollTop = logsRef.current.scrollHeight;
-    }
-  }, [generationLogs]);
 
   useEffect(() => {
     if (selectedPersonaId) {
@@ -127,20 +122,18 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
 
     setError(null);
     setRunning(true);
-    setGenerationLogs([]);
 
+    const customInputs = { painPoint, detail, sublimation };
     const task = createTask(topic, requirements, selectedPersonaId || undefined);
-    setGenerationLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] 任务已创建: ${task.id}`]);
 
     try {
-      setGenerationLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] 正在深度调研...`]);
-      
       const response = await fetch('/api/writing-agent/create-task', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           topic,
           requirements,
+          customInputs,
           apiBaseUrl: apiConfig.apiBaseUrl,
           apiKey: apiConfig.apiKey,
           model: apiConfig.model,
@@ -154,13 +147,9 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
         throw new Error(data.error || '任务创建失败');
       }
 
-      setGenerationLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] 调研完成，大纲已生成`]);
-
       if (data.outline) {
         setOutline(data.outline);
         setTaskStatus('outline_pending');
-        const sections = data.outline.sections || [];
-        setGenerationLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] 大纲待确认，共 ${sections.length} 个段落`]);
       }
 
       setRunning(false);
@@ -183,11 +172,10 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
     const sections = currentTask.outline.sections || [];
     const paragraphs: string[] = [];
     let previousContent = '';
+    const customInputs = { painPoint, detail, sublimation };
 
     for (let i = 0; i < sections.length; i++) {
       const section = sections[i];
-      const sectionTitle = section.title || `段落 ${i + 1}`;
-      setGenerationLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] 正在生成第 ${i + 1}/${sections.length} 段: ${sectionTitle}`]);
 
       try {
         const response = await fetch('/api/writing-agent/generate-paragraph', {
@@ -202,6 +190,7 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
             outline: currentTask.outline,
             researchReport: currentTask.researchReport,
             topic: currentTask.topic,
+            customInputs,
             apiBaseUrl: apiConfig.apiBaseUrl,
             apiKey: apiConfig.apiKey,
             model: apiConfig.model,
@@ -221,15 +210,9 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
             status: 'completed',
             validationResult: data.validationResults || data.validationResult,
           });
-
-          const validationResults = data.validationResults || data.validationResult;
-          const styleScore = validationResults?.styleValidation?.totalScore || validationResults?.styleScore || 0;
-          setGenerationLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] 第 ${i + 1} 段生成完成，风格评分: ${styleScore}`]);
-        } else {
-          setGenerationLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] 第 ${i + 1} 段生成失败: ${data.error || '未知错误'}`]);
         }
       } catch (err) {
-        setGenerationLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] 第 ${i + 1} 段生成异常: ${err instanceof Error ? err.message : '未知错误'}`]);
+        console.error('段落生成异常:', err);
       }
     }
 
@@ -237,7 +220,6 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
     setFinalDraft(finalDraft);
     setTaskStatus('completed');
     setRunning(false);
-    setGenerationLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] 全部生成完成！`]);
   };
 
   const handleCopy = async () => {
@@ -302,6 +284,20 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
     return statusMap[status] || { label: status, color: 'bg-gray-500' };
   };
 
+  const getProgressHint = (status: string, completedCount: number, totalCount: number) => {
+    if (status === 'initializing' || status === 'pending') return '正在初始化写作引擎...';
+    if (status === 'researching') return '正在理解核心痛点...';
+    if (status === 'outline_pending') return '正在搭建爆文骨架...';
+    if (status === 'generating') {
+      if (completedCount === 0) return '正在注入情感细节...';
+      if (completedCount < Math.floor(totalCount / 2)) return '正在精心雕琢段落...';
+      if (completedCount < totalCount) return '正在完善文章收尾...';
+    }
+    if (status === 'reviewing') return '正在进行最终打磨...';
+    if (status === 'completed') return '文章已生成完成！';
+    return '准备中...';
+  };
+
   return (
     <div className={cn('flex flex-col h-full bg-gray-50', className)}>
       <div className="flex-1 overflow-auto p-6">
@@ -326,12 +322,40 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  补充要求
+                  直击痛点 <span className="text-red-500">*</span>
                 </label>
                 <textarea
-                  value={requirements}
-                  onChange={(e) => setRequirements(e.target.value)}
-                  placeholder="可选：添加更多具体要求、风格偏好、字数要求等"
+                  value={painPoint}
+                  onChange={(e) => setPainPoint(e.target.value)}
+                  placeholder="在这段关系中，最让你感到委屈、或瞬间死心的一个点是什么？"
+                  rows={3}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  disabled={isRunning}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  颗粒度细节 <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={detail}
+                  onChange={(e) => setDetail(e.target.value)}
+                  placeholder="用一个具体的物品、一句伤人的话、或特定场景来证明这种变化，越细越好。"
+                  rows={3}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  disabled={isRunning}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  反常识升华 <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={sublimation}
+                  onChange={(e) => setSublimation(e.target.value)}
+                  placeholder="经历了这件事，给其他遭遇类似情况的人一句最清醒的建议。"
                   rows={3}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   disabled={isRunning}
@@ -565,107 +589,92 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
 
           {currentTask && (
             <div className="bg-white rounded-lg shadow-sm p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">任务进度</h2>
-                <div className="flex items-center gap-2">
-                  <div className={cn('w-3 h-3 rounded-full', getStatusDisplay(currentTask.status).color)} />
-                  <span className="text-sm font-medium">{getStatusDisplay(currentTask.status).label}</span>
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">{currentTask.topic}</h2>
+                  <p className="text-sm text-gray-500 mt-1">{getStatusDisplay(currentTask.status).label}</p>
                 </div>
+                <div className={cn('w-3 h-3 rounded-full', getStatusDisplay(currentTask.status).color)} />
               </div>
 
-              <div className="space-y-4">
-                <div className="flex items-center gap-4">
-                  <div className="flex-1">
-                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-blue-600 transition-all duration-300"
-                        style={{
-                          width: `${
-                            currentTask.status === 'completed' ? 100 :
-                            currentTask.status === 'generating' ? 50 :
-                            currentTask.status === 'outline_pending' ? 30 :
-                            10
-                          }%`,
-                        }}
-                      />
-                    </div>
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <p className="text-sm text-blue-600 font-medium animate-pulse">
+                    {getProgressHint(
+                      currentTask.status, 
+                      currentTask.paragraphs ? currentTask.paragraphs.filter(p => p.status === 'completed').length : 0,
+                      currentTask.paragraphs ? currentTask.paragraphs.length : 0
+                    )}
+                  </p>
+                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-blue-600 transition-all duration-500 ease-out"
+                      style={{
+                        width: `${
+                          currentTask.status === 'completed' ? 100 :
+                          currentTask.status === 'generating' 
+                            ? Math.min(90, Math.max(30, (currentTask.paragraphs ? currentTask.paragraphs.filter(p => p.status === 'completed').length : 0) / (currentTask.paragraphs ? Math.max(1, currentTask.paragraphs.length) : 1) * 90)) :
+                          currentTask.status === 'outline_pending' ? 30 :
+                          currentTask.status === 'researching' ? 15 :
+                          5
+                        }%`,
+                      }}
+                    />
                   </div>
-                  <span className="text-sm text-gray-600">
-                    {currentTask.paragraphs ? currentTask.paragraphs.filter(p => p.status === 'completed').length : 0}/{currentTask.paragraphs ? currentTask.paragraphs.length : 0} 段落
-                  </span>
+                  <div className="flex justify-between text-xs text-gray-500">
+                    <span>
+                      {currentTask.status === 'generating' 
+                        ? `${currentTask.paragraphs ? currentTask.paragraphs.filter(p => p.status === 'completed').length : 0} / ${currentTask.paragraphs ? currentTask.paragraphs.length : 0} 段落` 
+                        : ''}
+                    </span>
+                  </div>
                 </div>
 
-                {currentTask.outline && (
-                  <div className="border border-gray-200 rounded-lg overflow-hidden">
-                    <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
-                      <h3 className="font-medium text-gray-900">{currentTask.outline.title || '大纲'}</h3>
-                      <p className="text-sm text-gray-600">{currentTask.outline.theme || ''}</p>
+                {currentTask.outline && !currentTask.finalDraft && (
+                  <div className="border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
+                    <div className="px-4 py-3 border-b border-gray-200 bg-white">
+                      <h3 className="font-medium text-gray-900">文章大纲</h3>
+                      <p className="text-sm text-gray-500 mt-1">{currentTask.outline.theme || ''}</p>
                     </div>
-                    <div className="p-4">
-                      {currentTask.outline.sections && currentTask.outline.sections.map((section, index) => (
-                        <div key={section.id || index} className="mb-4 pb-4 border-b border-gray-100 last:border-b-0 last:mb-0 last:pb-0">
-                          <div className="font-medium text-gray-800 mb-2">{section.title || `段落 ${index + 1}`}</div>
-                          {section.keyPoints && section.keyPoints.length > 0 && (
-                            <ul className="list-disc list-inside text-sm text-gray-600 space-y-1">
-                              {section.keyPoints.map((point, i) => (
-                                <li key={i}>{point}</li>
-                              ))}
-                            </ul>
-                          )}
+                  </div>
+                )}
+
+                {(currentTask.status === 'generating' || currentTask.finalDraft) && (
+                  <div className="border border-gray-200 rounded-lg p-6 shadow-sm bg-white">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-medium text-gray-900">文章预览</h3>
+                      {currentTask.finalDraft && (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={handleHumanizeOptimizer}
+                            disabled={isRunning}
+                            className="px-3 py-1 text-xs rounded-lg bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            🔨 深度去 AI 味
+                          </button>
+                          <button
+                            onClick={handleCopy}
+                            className={cn(
+                              'px-3 py-1 text-xs rounded-lg transition-all duration-200',
+                              copied 
+                                ? 'bg-green-100 text-green-700' 
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            )}
+                          >
+                            {copied ? '已复制!' : '复制全文'}
+                          </button>
                         </div>
+                      )}
+                    </div>
+                    <div className="prose prose-blue max-w-none">
+                      {(currentTask.finalDraft || (currentTask.paragraphs?.filter(p => p.content).map(p => p.content).join('\n\n')) || '').split('\n\n').map((paragraph, index) => (
+                        <p key={index} className="mb-4 text-gray-700 leading-relaxed">
+                          {paragraph}
+                        </p>
                       ))}
                     </div>
                   </div>
                 )}
-              </div>
-            </div>
-          )}
-
-          {generationLogs.length > 0 && (
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">执行日志</h2>
-              <div
-                ref={logsRef}
-                className="bg-gray-900 text-gray-100 rounded-lg p-4 h-48 overflow-auto font-mono text-sm"
-              >
-                {generationLogs.map((log, index) => (
-                  <div key={index} className="mb-1">{log}</div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {currentTask?.finalDraft && (
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">生成结果</h2>
-                <div className="flex gap-3">
-                  <button
-                    onClick={handleHumanizeOptimizer}
-                    disabled={isRunning}
-                    className="px-4 py-2 text-sm rounded-lg bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    🔨 深度去 AI 味
-                  </button>
-                  <button
-                    onClick={handleCopy}
-                    className={cn(
-                      'px-4 py-2 text-sm rounded-lg transition-all duration-200',
-                      copied 
-                        ? 'bg-green-100 text-green-700' 
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    )}
-                  >
-                    {copied ? '已复制!' : '复制全文'}
-                  </button>
-                </div>
-              </div>
-              <div className="prose prose-blue max-w-none">
-                {currentTask.finalDraft.split('\n\n').map((paragraph, index) => (
-                  <p key={index} className="mb-4 text-gray-700 leading-relaxed">
-                    {paragraph}
-                  </p>
-                ))}
               </div>
             </div>
           )}
