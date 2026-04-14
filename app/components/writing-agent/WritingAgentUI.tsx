@@ -11,6 +11,15 @@ interface WritingAgentUIProps {
 }
 
 export default function WritingAgentUI({ className }: WritingAgentUIProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const scroll = (direction: 'left' | 'right') => {
+    if (scrollRef.current) {
+      const scrollAmount = direction === 'left' ? -300 : 300;
+      scrollRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    }
+  };
+
   const {
     currentTask,
     persona,
@@ -50,6 +59,26 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
   const [referenceSkeleton, setReferenceSkeleton] = useState('');
   const [showSkeletonPanel, setShowSkeletonPanel] = useState(false);
   const [showPersonaList, setShowPersonaList] = useState(false);
+  const [wordCount, setWordCount] = useState(1500);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  const CATEGORIES = [
+    { id: 'emotion', name: '情感心理', icon: '❤️', defaultTopic: '写一篇关于中国式父母病态节俭的爆文' },
+    { id: 'life', name: '生活家居', icon: '🏠', defaultTopic: '断舍离之后，我才发现家里真正需要的东西只有这几样' },
+    { id: 'food', name: '美食旅行', icon: '🍜', defaultTopic: '去了三次成都，我才发现真正好吃的都不在宽窄巷子' },
+    { id: 'work', name: '职场财经', icon: '💼', defaultTopic: '那个每天准点下班的同事，其实早就实现了副业月入过万' },
+    { id: 'knowledge', name: '知识科普', icon: '📚', defaultTopic: '你每天刷手机的时间，正在悄悄毁掉你的大脑' },
+    { id: 'entertainment', name: '娱乐影视', icon: '🎬', defaultTopic: '这部剧上映三天就爆了，但它的台词更扎心' },
+    { id: 'tech', name: '科技数码', icon: '📱', defaultTopic: '买了最新款iPhone之后，我才发现自己是个大冤种' },
+    { id: 'car', name: '汽车体育', icon: '🚗', defaultTopic: '开了五年车，我才发现买车险时最不该买的就是这一项' },
+    { id: 'news', name: '新闻资讯', icon: '📰', defaultTopic: '这条新闻刷爆朋友圈，但背后的真相却没人敢说' },
+    { id: 'rural', name: '三农乡村', icon: '🌾', defaultTopic: '回农村创业三年，我赔了50万但赚了一辈子的教训' },
+    { id: 'baby', name: '母婴亲子', icon: '👶', defaultTopic: '生了二胎之后，我才发现老大才是这个家最可怜的人' },
+    { id: 'health', name: '健康养生', icon: '🏥', defaultTopic: '体检报告出来的那一天，我彻底戒掉了外卖和熬夜' },
+    { id: 'game', name: '游戏电竞', icon: '🎮', defaultTopic: '打了十年游戏，我总结出了一套职场生存法则' },
+    { id: 'fashion', name: '时尚美妆', icon: '💄', defaultTopic: '花了十万买化妆品，我才发现最好用的居然是这几样' },
+    { id: 'other', name: '其他', icon: '✨', defaultTopic: '这件事我憋了三年，今天终于敢说出来了' },
+  ];
 
   useEffect(() => {
     loadLocalPersonas();
@@ -305,6 +334,47 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
           <div className="bg-white rounded-lg shadow-sm p-6">
             <h1 className="text-2xl font-bold text-gray-900 mb-6">专属原创写作Agent</h1>
 
+            <div className="mb-8">
+              <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                <span>✨</span>
+                创作灵感区 · 点击卡片快速选题
+              </h2>
+              <div className="relative group flex items-center">
+                <button
+                  onClick={(e) => { e.preventDefault(); scroll('left'); }}
+                  className="absolute -left-3 z-10 hidden group-hover:flex items-center justify-center w-8 h-8 bg-white/90 rounded-full shadow-md border border-gray-100 text-gray-500 hover:text-blue-500 hover:bg-white transition-all"
+                >
+                  ❮
+                </button>
+                
+                <div
+                  ref={scrollRef}
+                  className="flex overflow-x-auto gap-3 pb-2 snap-x [&amp;::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] scroll-smooth"
+                >
+                  {CATEGORIES.map((category) => (
+                    <button
+                      key={category.id}
+                      onClick={() => setTopic(category.defaultTopic)}
+                      disabled={isRunning}
+                      className="group relative p-3 rounded-lg border border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex flex-col items-center justify-center text-center min-h-[90px] flex-shrink-0 w-32 md:w-40 snap-start"
+                    >
+                      <div className="text-2xl mb-1">{category.icon}</div>
+                      <div className="text-sm font-medium text-gray-700 group-hover:text-blue-600 transition-colors line-clamp-2">
+                        {category.name}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                
+                <button
+                  onClick={(e) => { e.preventDefault(); scroll('right'); }}
+                  className="absolute -right-3 z-10 hidden group-hover:flex items-center justify-center w-8 h-8 bg-white/90 rounded-full shadow-md border border-gray-100 text-gray-500 hover:text-blue-500 hover:bg-white transition-all"
+                >
+                  ❯
+                </button>
+              </div>
+            </div>
+
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -320,47 +390,60 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  直击痛点 <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  value={painPoint}
-                  onChange={(e) => setPainPoint(e.target.value)}
-                  placeholder="在这段关系中，最让你感到委屈、或瞬间死心的一个点是什么？"
-                  rows={3}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  disabled={isRunning}
-                />
+              <div className="mt-4">
+                <button
+                  onClick={() => setShowAdvanced(!showAdvanced)}
+                  className="text-sm text-blue-500 hover:text-blue-600 flex items-center gap-1 transition-colors"
+                >
+                  {showAdvanced ? '⬆️ 收起高阶设定' : '✨ 展开高阶爆文设定 (提升文章深度)'}
+                </button>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  颗粒度细节 <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  value={detail}
-                  onChange={(e) => setDetail(e.target.value)}
-                  placeholder="用一个具体的物品、一句伤人的话、或特定场景来证明这种变化，越细越好。"
-                  rows={3}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  disabled={isRunning}
-                />
-              </div>
+              {showAdvanced && (
+                <div className="space-y-4 mt-4 pt-4 border-t border-gray-100">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      核心痛点 (选填)
+                    </label>
+                    <textarea
+                      value={painPoint}
+                      onChange={(e) => setPainPoint(e.target.value)}
+                      placeholder="描述目标人群在这个话题下的核心痛点..."
+                      rows={3}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      disabled={isRunning}
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  反常识升华 <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  value={sublimation}
-                  onChange={(e) => setSublimation(e.target.value)}
-                  placeholder="经历了这件事，给其他遭遇类似情况的人一句最清醒的建议。"
-                  rows={3}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  disabled={isRunning}
-                />
-              </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      真实细节描述 (选填)
+                    </label>
+                    <textarea
+                      value={detail}
+                      onChange={(e) => setDetail(e.target.value)}
+                      placeholder="用一个具体的物品或场景来生动证明..."
+                      rows={3}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      disabled={isRunning}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      结尾升华/金句 (选填)
+                    </label>
+                    <textarea
+                      value={sublimation}
+                      onChange={(e) => setSublimation(e.target.value)}
+                      placeholder="给面临类似困境的人一句点醒他们的建议..."
+                      rows={3}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      disabled={isRunning}
+                    />
+                  </div>
+                </div>
+              )}
 
               <div>
                 <div className="flex items-center justify-between mb-2">
@@ -547,6 +630,30 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
                 </div>
               )}
 
+              <div className="mt-6 p-5 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200">
+                <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                  <span>📝</span>
+                  输出配置 · 目标字数
+                </h2>
+                <div className="flex items-center gap-4">
+                  <div className="flex-1">
+                    <input
+                      type="range"
+                      min="800"
+                      max="3000"
+                      step="100"
+                      value={wordCount}
+                      onChange={(e) => setWordCount(Number(e.target.value))}
+                      className="w-full h-2 bg-amber-200 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                      disabled={isRunning}
+                    />
+                  </div>
+                  <div className="text-xl font-bold text-amber-600 min-w-[120px] text-right">
+                    {wordCount} 字
+                  </div>
+                </div>
+              </div>
+
               <div className="flex gap-3">
                 {!isRunning && !currentTask?.finalDraft && (
                   <button
@@ -673,6 +780,37 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
                         </p>
                       ))}
                     </div>
+                    {currentTask.finalDraft && (
+                      <div className="mt-6 p-5 bg-gradient-to-r from-blue-50 via-purple-50 to-pink-50 rounded-xl border border-blue-200">
+                        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                          <span>🎯</span>
+                          一站式工作台
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <button
+                            onClick={() => alert('商业化高阶功能即将上线，敬请期待！')}
+                            className="flex flex-col items-center justify-center p-5 bg-white rounded-xl border-2 border-blue-200 hover:border-blue-400 hover:shadow-lg transition-all duration-300"
+                          >
+                            <span className="text-3xl mb-2">🎨</span>
+                            <span className="font-semibold text-gray-700">AI 情绪配图</span>
+                          </button>
+                          <button
+                            onClick={() => alert('商业化高阶功能即将上线，敬请期待！')}
+                            className="flex flex-col items-center justify-center p-5 bg-white rounded-xl border-2 border-purple-200 hover:border-purple-400 hover:shadow-lg transition-all duration-300"
+                          >
+                            <span className="text-3xl mb-2">🪄</span>
+                            <span className="font-semibold text-gray-700">一键微信排版</span>
+                          </button>
+                          <button
+                            onClick={() => alert('商业化高阶功能即将上线，敬请期待！')}
+                            className="flex flex-col items-center justify-center p-5 bg-white rounded-xl border-2 border-pink-200 hover:border-pink-400 hover:shadow-lg transition-all duration-300"
+                          >
+                            <span className="text-3xl mb-2">🚀</span>
+                            <span className="font-semibold text-gray-700">矩阵一键分发</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
