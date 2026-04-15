@@ -177,6 +177,93 @@ async function performDeepResearch(
   }
 }
 
+async function getAIFallbackOutline(
+  topic: string,
+  persona: any,
+  researchReport: any,
+  customInputs: any,
+  apiBaseUrl: string,
+  apiKey: string,
+  model: string
+): Promise<OutlineV2> {
+  const safePersona = persona || {};
+  
+  const systemPrompt = '你是一个大纲生成器。请根据主题输出严格的 JSON，不要包含任何 markdown 符号。必须包含开头、动态数量的平行递进模块、结尾。绝对禁止使用第二人称说教。';
+  const userPrompt = `写作主题: ${topic}。请立即生成大纲。`;
+  
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
+  
+  try {
+    const response = await fetch(`${apiBaseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: 0.7,
+        max_tokens: 2000,
+      }),
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      throw new Error('AI微型大脑请求失败');
+    }
+    
+    const data = await response.json();
+    let content = data.choices?.[0]?.message?.content || '';
+    if (!content) {
+      throw new Error('AI微型大脑返回空内容');
+    }
+    
+    content = content.replace(/```json/g, '').replace(/```/g, '').trim();
+    const result = JSON.parse(content);
+    
+    if (!result.sections || !Array.isArray(result.sections) || result.sections.length === 0) {
+      throw new Error('AI微型大脑返回的sections无效');
+    }
+    
+    return {
+      id: generateId(),
+      title: result.title || topic,
+      theme: result.theme || topic,
+      coreValueLine: result.coreValueLine || `帮助读者深入理解${topic}`,
+      trackType: (safePersona.trackType as string) || '情感文',
+      fullTextConstraintRules: result.fullTextConstraintRules || '',
+      antiAiStructureRules: result.antiAiStructureRules || '',
+      openingClosingEchoRule: result.openingClosingEchoRule || '',
+      sections: (result.sections || []).map((s: any) => ({
+        corePosition: s.corePosition || '',
+        weight: s.weight || Math.floor(100 / result.sections.length),
+        priority: (s.priority as 'high' | 'medium' | 'low') || 'medium',
+        wordRange: s.wordRange || { min: 150, max: 300 },
+        coreKeyPoints: s.coreKeyPoints || [],
+        emotionRhythm: s.emotionRhythm || '',
+        mainLineRelevance: s.mainLineRelevance || '',
+        requiredMaterial: s.requiredMaterial || '',
+        bannedContent: [...(s.bannedContent || []), ...(researchReport?.zhuqueHighFrequencyBanList || [])],
+        flawInjectionRule: s.flawInjectionRule || '匹配用户原生瑕疵习惯，注入自然瑕疵',
+      })),
+      totalWeight: result.totalWeight || 100,
+      homogeneityAvoidanceScore: result.homogeneityAvoidanceScore || 85,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    clearTimeout(timeoutId);
+    throw error;
+  }
+}
+
 async function generateOutlineV2(
   topic: string,
   requirements: string,
@@ -188,9 +275,19 @@ async function generateOutlineV2(
   persona: Record<string, unknown> | null
 ): Promise<OutlineV2> {
   const safePersona = persona || {};
-  const fixedStructure = safePersona.fixedStructureParadigm || {};
-  const fixedNarrative = safePersona.fixedNarrativeParadigm || {};
+  const fixedStructure = safePersona.fixedStructureParadigm || {
+    fullTextStructure: '开头引人入胜抛出核心结论→根据标题明确要求动态划分递进模块（要求几个就写几个，严禁锁死3个）→结尾升华闭环',
+    moduleInnerStructure: '模块单独成段→核心金句→金句佐证→第一/第三人称逻辑拆解(严禁使用第二人称「你」说教)→极简案例→收尾',
+    viewProgressiveRule: '所有模块从表层到中层到底层，层层递进'
+  };
+  const fixedNarrative = safePersona.fixedNarrativeParadigm || {
+    narrativeCore: '以第一人称「我」或第三人称「她们」贯穿全文，以真实经历为核心，绝对禁止使用「你」进行说教',
+    empathyLogic: '先戳群体痛点→给结论→拆逻辑→案例佐证→情绪安抚',
+    dialoguePosture: '平视读者，不吐槽、不说教'
+  };
   const fixedExpression = safePersona.fixedExpressionRules || {};
+
+  let taskOutline: OutlineV2;
 
   try {
     const systemPrompt = `你是全球顶级的爆款内容策划专家，擅长设计逻辑闭环、情绪饱满、主线清晰、天然适配爆款逻辑、同时规避AI刻板结构的文章大纲。
@@ -216,10 +313,10 @@ ${JSON.stringify(fixedExpression, null, 2)}
 4.  必须100%落地深度调研结果中的差异化角度、用户痛点，每个差异化角度、用户痛点必须对应到具体的段落，不允许出现调研与大纲脱节
 
 ### 二、硬编码锁定用户固定结构规则（不允许任何自由发挥）
-1.  必须100%遵循用户的全文固定结构，开头必须先抛核心结论，过渡段必须明确抛出3个核心模块，主体必须是3个平行递进的模块，必须使用用户固定的分隔符、编号规则，结尾必须是三段式闭环
+1.  必须100%遵循用户的全文固定结构，开头必须先抛核心结论，过渡段必须明确抛出核心模块，主体模块的数量必须严格根据用户的【写作主题】和【内容要求】动态拆解！绝对禁止锁死为3个模块！例如：如果标题要求'4个现状'，必须生成4个对应的递进模块；要求'5条建议'就必须生成5个模块，必须使用用户固定的分隔符、编号规则，结尾必须是三段式闭环
 2.  每个模块必须严格遵循用户的模块内部结构，明确模块核心金句、逻辑拆解要求、案例要求、收尾规则
-3.  3个模块的核心观点必须严格遵循用户的递进逻辑，从表层→中层→底层，绝不允许观点重复、逻辑混乱
-4.  必须明确人设与叙事约束：每个模块必须明确第二人称「你」的使用要求、第一人称案例的使用边界，不允许大段个人故事
+3.  模块的核心观点必须严格遵循用户的递进逻辑，从表层→中层→底层，绝不允许观点重复、逻辑混乱
+4.  必须明确人设与叙事约束：绝对禁止使用第二人称「你」进行居高临下的说教！必须强制使用第一人称（「我/我们」）或具有强烈共情色彩的第三人称（例如「很多中年女人」、「她们」）进行叙事，拉近与读者的距离，第一人称案例的使用边界，不允许大段个人故事
 5.  必须明确语言约束：每个模块必须明确句长、段落长度、金句位置、无效表达禁止规则，从源头锁定语言节奏
 6.  绝对禁止规则：绝对不允许生成不符合用户固定结构的大纲，绝对不允许无模块划分、无递进逻辑、无清晰框架的流水账大纲
 
@@ -291,29 +388,30 @@ ${JSON.stringify(fixedExpression, null, 2)}
 
       if (response.ok) {
         const data = await response.json();
-        const content = data.choices?.[0]?.message?.content || '';
+        let content = data.choices?.[0]?.message?.content || '';
         if (content) {
+          content = content.replace(/```json/g, '').replace(/```/g, '').trim();
           result = JSON.parse(content);
         }
       }
     } catch (error) {
-      console.error('AI大纲生成失败，使用默认大纲:', error);
+      console.warn("深度大纲生成失败或格式损坏，尝试极简 Prompt 重试...", error);
     }
 
     if (result && result.sections && Array.isArray(result.sections) && result.sections.length > 0) {
-      return {
+      taskOutline = {
         id: generateId(),
         title: result.title || topic,
         theme: result.theme || '',
         coreValueLine: result.coreValueLine || '',
-        trackType: safePersona.trackType || '情感文',
+        trackType: (safePersona.trackType as string) || '情感文',
         fullTextConstraintRules: result.fullTextConstraintRules || '',
         antiAiStructureRules: result.antiAiStructureRules || '',
         openingClosingEchoRule: result.openingClosingEchoRule || '',
         sections: (result.sections || []).map((s: any) => ({
           corePosition: s.corePosition || '',
           weight: s.weight || 10,
-          priority: s.priority || 'medium',
+          priority: (s.priority as 'high' | 'medium' | 'low') || 'medium',
           wordRange: s.wordRange || { min: 150, max: 300 },
           coreKeyPoints: s.coreKeyPoints || [],
           emotionRhythm: s.emotionRhythm || '',
@@ -327,16 +425,29 @@ ${JSON.stringify(fixedExpression, null, 2)}
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
+    } else {
+      console.warn("深度大纲生成失败或格式损坏，尝试极简 Prompt 重试...");
+      try {
+        taskOutline = await getAIFallbackOutline(topic, safePersona, researchReport, customInputs, apiBaseUrl, apiKey, model);
+      } catch (fallbackError) {
+        console.error("API 彻底无响应或重试失败，触发纯物理级智能兜底...", fallbackError);
+        taskOutline = getStaticFallbackOutline(topic, safePersona, researchReport, customInputs);
+      }
     }
 
-    return getDefaultOutline(topic, safePersona, researchReport, customInputs);
+    return taskOutline;
   } catch (error) {
-    console.error('大纲生成失败，使用默认大纲:', error);
-    return getDefaultOutline(topic, safePersona, researchReport);
+    console.warn("深度大纲生成失败或格式损坏，尝试极简 Prompt 重试...", error);
+    try {
+      return await getAIFallbackOutline(topic, safePersona, researchReport, customInputs, apiBaseUrl, apiKey, model);
+    } catch (fallbackError) {
+      console.error("API 彻底无响应或重试失败，触发纯物理级智能兜底...", fallbackError);
+      return getStaticFallbackOutline(topic, safePersona, researchReport, customInputs);
+    }
   }
 }
 
-function getDefaultOutline(
+function getStaticFallbackOutline(
   topic: string,
   persona: Record<string, unknown>,
   researchReport: ResearchReportV2,
@@ -344,88 +455,76 @@ function getDefaultOutline(
 ): OutlineV2 {
   const safePersona = persona || {};
   
-  const sections = [
-    {
-      corePosition: '开头段：1-2个短句，开门见山直接抛出全文核心金句结论',
-      weight: 10,
-      priority: 'high',
-      wordRange: { min: 80, max: 150 },
-      coreKeyPoints: ['直接抛出核心金句结论', '精准戳中核心痛点', '不铺垫、不讲故事、不绕弯子'],
-      emotionRhythm: '直接有力',
-      mainLineRelevance: '开头引入主题，直接给出答案',
-      requiredMaterial: '用户专属核心金句',
-      bannedContent: researchReport.zhuqueHighFrequencyBanList,
-      flawInjectionRule: '匹配用户原生瑕疵习惯，极致短句',
-    },
-    {
-      corePosition: '过渡段：用1句名人名言/公认金句承接，直接抛出全文的3个判断标准',
-      weight: 10,
-      priority: 'high',
-      wordRange: { min: 100, max: 180 },
-      coreKeyPoints: ['名人名言承接', '抛出3个判断标准', '给读者清晰的阅读预期'],
-      emotionRhythm: '清晰明确',
-      mainLineRelevance: '过渡衔接，明确全文框架',
-      requiredMaterial: '1句名人名言/公认金句',
-      bannedContent: researchReport.zhuqueHighFrequencyBanList,
-      flawInjectionRule: '匹配用户原生瑕疵习惯',
-    },
-    {
-      corePosition: '模块01：模块编号单独成段，直接抛出本模块核心观点金句',
-      weight: 20,
+  const numMatch = topic.match(/\d+/);
+  const moduleCount = numMatch ? Math.min(Math.max(parseInt(numMatch[0], 10), 2), 6) : 4;
+  
+  const sections: OutlineV2['sections'] = [];
+  
+  sections.push({
+    corePosition: '开头段：1-2个短句，开门见山直接抛出全文核心金句结论',
+    weight: 10,
+    priority: 'high',
+    wordRange: { min: 80, max: 150 },
+    coreKeyPoints: ['直接抛出核心金句结论', '精准戳中核心痛点', '不铺垫、不讲故事、不绕弯子'],
+    emotionRhythm: '直接有力',
+    mainLineRelevance: '开头引入主题，直接给出答案',
+    requiredMaterial: '用户专属核心金句',
+    bannedContent: researchReport.zhuqueHighFrequencyBanList,
+    flawInjectionRule: '匹配用户原生瑕疵习惯，极致短句',
+  });
+  
+  sections.push({
+    corePosition: '过渡段：用1句名人名言/公认金句承接，直接抛出全文的核心判断标准',
+    weight: 10,
+    priority: 'high',
+    wordRange: { min: 100, max: 180 },
+    coreKeyPoints: ['名人名言承接', '抛出核心判断标准', '给读者清晰的阅读预期'],
+    emotionRhythm: '清晰明确',
+    mainLineRelevance: '过渡衔接，明确全文框架',
+    requiredMaterial: '1句名人名言/公认金句',
+    bannedContent: researchReport.zhuqueHighFrequencyBanList,
+    flawInjectionRule: '匹配用户原生瑕疵习惯',
+  });
+  
+  const moduleWeight = Math.floor(60 / moduleCount);
+  const emotionRhythms = ['认知颠覆', '理性拆解', '情绪释放', '深度思考', '价值重塑', '行动指引'];
+  const mainLineLevels = ['表层维度', '中层维度', '底层维度', '深层洞察', '本质解析', '行动导向'];
+  
+  for (let i = 0; i < moduleCount; i++) {
+    sections.push({
+      corePosition: `核心模块${i + 1}：直接抛出本模块核心观点金句`,
+      weight: moduleWeight,
       priority: 'high',
       wordRange: { min: 200, max: 300 },
-      coreKeyPoints: ['模块编号单独成段', '核心观点金句', '金句佐证', '第二人称逻辑拆解', '极简案例', '模块收尾'],
-      emotionRhythm: '认知颠覆',
-      mainLineRelevance: '第1个判断标准，表层维度',
+      coreKeyPoints: ['核心观点金句', '金句佐证', '第一/第三人称逻辑拆解', '极简案例', '模块收尾'],
+      emotionRhythm: emotionRhythms[i % emotionRhythms.length],
+      mainLineRelevance: `第${i + 1}个判断标准，${mainLineLevels[i % mainLineLevels.length]}`,
       requiredMaterial: '极简案例佐证',
       bannedContent: researchReport.zhuqueHighFrequencyBanList,
       flawInjectionRule: '匹配用户原生瑕疵习惯，极致短句',
-    },
-    {
-      corePosition: '模块02：模块编号单独成段，直接抛出本模块核心观点金句',
-      weight: 20,
-      priority: 'high',
-      wordRange: { min: 200, max: 300 },
-      coreKeyPoints: ['模块编号单独成段', '核心观点金句', '金句佐证', '第二人称逻辑拆解', '极简案例', '模块收尾'],
-      emotionRhythm: '理性拆解',
-      mainLineRelevance: '第2个判断标准，中层维度',
-      requiredMaterial: '极简案例佐证',
-      bannedContent: researchReport.zhuqueHighFrequencyBanList,
-      flawInjectionRule: '匹配用户原生瑕疵习惯，极致短句',
-    },
-    {
-      corePosition: '模块03：模块编号单独成段，直接抛出本模块核心观点金句',
-      weight: 20,
-      priority: 'high',
-      wordRange: { min: 200, max: 300 },
-      coreKeyPoints: ['模块编号单独成段', '核心观点金句', '金句佐证', '第二人称逻辑拆解', '极简案例', '模块收尾'],
-      emotionRhythm: '情绪释放',
-      mainLineRelevance: '第3个判断标准，底层维度',
-      requiredMaterial: '极简案例佐证',
-      bannedContent: researchReport.zhuqueHighFrequencyBanList,
-      flawInjectionRule: '匹配用户原生瑕疵习惯，极致短句',
-    },
-    {
-      corePosition: '结尾段：三段式固定闭环，回扣开头、浓缩标准、情绪祝福',
-      weight: 20,
-      priority: 'medium',
-      wordRange: { min: 150, max: 250 },
-      coreKeyPoints: ['回扣开头核心结论', '浓缩3个模块的核心标准', '给读者温暖祝福/情绪出口'],
-      emotionRhythm: '温暖治愈',
-      mainLineRelevance: '首尾呼应，完成全文闭环',
-      requiredMaterial: '温暖有力的结尾',
-      bannedContent: researchReport.zhuqueHighFrequencyBanList,
-      flawInjectionRule: '匹配用户原生瑕疵习惯',
-    },
-  ];
+    });
+  }
+  
+  sections.push({
+    corePosition: '结尾段：三段式固定闭环，回扣开头、浓缩标准、情绪祝福',
+    weight: 20,
+    priority: 'medium',
+    wordRange: { min: 150, max: 250 },
+    coreKeyPoints: ['回扣开头核心结论', '浓缩核心模块的判断标准', '给读者温暖祝福/情绪出口'],
+    emotionRhythm: '温暖治愈',
+    mainLineRelevance: '首尾呼应，完成全文闭环',
+    requiredMaterial: '温暖有力的结尾',
+    bannedContent: researchReport.zhuqueHighFrequencyBanList,
+    flawInjectionRule: '匹配用户原生瑕疵习惯',
+  });
 
   return {
     id: generateId(),
     title: topic,
     theme: topic,
-    coreValueLine: `帮助读者深入理解${topic}，提供3个可落地的判断标准，完成从清醒认知到治愈安抚的情绪闭环`,
-    trackType: safePersona.trackType || '情感文',
-    fullTextConstraintRules: '必须严格遵循用户固定写作范式：开头抛结论→过渡抛3个标准→3个平行递进模块（▼+01/02/03.分隔）→结尾三段式闭环，大量单句成段，最长段落不超过5句话',
+    coreValueLine: `帮助读者深入理解${topic}，提供可落地的判断标准，完成从清醒认知到治愈安抚的情绪闭环`,
+    trackType: (safePersona.trackType as string) || '情感文',
+    fullTextConstraintRules: '必须严格遵循用户固定写作范式：开头抛结论→过渡抛标准→动态数量平行递进模块(严格按标题要求生成，禁止锁死)→结尾三段式闭环，大量单句成段，最长段落不超过5句话',
     antiAiStructureRules: '严格遵循用户固定结构，避免AI刻板结构',
     openingClosingEchoRule: '开头直接抛核心结论，结尾三段式闭环：回扣开头→浓缩标准→情绪祝福',
     sections,

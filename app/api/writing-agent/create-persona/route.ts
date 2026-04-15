@@ -318,15 +318,15 @@ function buildPersonaFromAnalysis(
     },
 
     fixedStructureParadigm: {
-      fullTextStructure: (analysis.fixedStructureParadigm as any)?.fullTextStructure || '开头核心结论→过渡段抛出3个判断标准→3个平行递进模块→结尾三段式闭环',
-      moduleInnerStructure: (analysis.fixedStructureParadigm as any)?.moduleInnerStructure || '模块编号单独成段→核心观点金句→金句佐证→第二人称逻辑拆解→极简案例→模块收尾闭环',
+      fullTextStructure: (analysis.fixedStructureParadigm as any)?.fullTextStructure || '开头核心结论→过渡段抛出判断标准→根据用户标题动态划分递进模块(需根据标题数字动态生成，严禁锁死3个)→结尾三段式闭环',
+      moduleInnerStructure: (analysis.fixedStructureParadigm as any)?.moduleInnerStructure || '模块编号单独成段→核心观点金句→金句佐证→第一人称或第三人称逻辑拆解(绝对禁止第二人称说教)→极简案例→模块收尾闭环',
       typesettingRules: (analysis.fixedStructureParadigm as any)?.typesettingRules || '清晰的模块划分，清晰的逻辑递进',
-      viewProgressiveRule: (analysis.fixedStructureParadigm as any)?.viewProgressiveRule || '从表层→中层→底层，层层递进',
+      viewProgressiveRule: (analysis.fixedStructureParadigm as any)?.viewProgressiveRule || '各模块从表层到中层到底层，层层递进',
     },
 
     fixedNarrativeParadigm: {
       corePersona: (analysis.fixedNarrativeParadigm as any)?.corePersona || '清醒通透、温柔克制的情感人生导师',
-      narrativeCore: (analysis.fixedNarrativeParadigm as any)?.narrativeCore || '第二人称「你」贯穿全文，全程以读者为核心',
+      narrativeCore: (analysis.fixedNarrativeParadigm as any)?.narrativeCore || '以第一人称「我」或第三人称「她们/很多人」贯穿全文，绝对禁止使用居高临下的「你」进行爹味说教',
       empathyLogic: (analysis.fixedNarrativeParadigm as any)?.empathyLogic || '先戳读者群体痛点→给结论→拆逻辑→案例佐证→情绪安抚',
       firstPersonRule: (analysis.fixedNarrativeParadigm as any)?.firstPersonRule || '仅用于极简案例佐证，单案例不超过2句话',
       dialoguePosture: (analysis.fixedNarrativeParadigm as any)?.dialoguePosture || '和读者平等对话，引导式输出',
@@ -436,14 +436,14 @@ function getDefaultPersonaAnalysis(): Record<string, unknown> {
       sceneDetails: ['场景细节1', '场景细节2', '场景细节3', '场景细节4', '场景细节5'],
     },
     fixedStructureParadigm: {
-      fullTextStructure: '开头核心结论→过渡段抛出3个判断标准→3个平行递进模块（▼+01/02/03.分隔）→结尾三段式闭环',
-      moduleInnerStructure: '模块编号单独成段→核心观点金句→金句佐证→第二人称逻辑拆解→极简案例→模块收尾闭环',
+      fullTextStructure: '开头核心结论→过渡段抛出判断标准→根据用户标题动态划分递进模块(需根据标题数字动态生成，严禁锁死3个)→结尾三段式闭环',
+      moduleInnerStructure: '模块编号单独成段→核心观点金句→金句佐证→第一人称或第三人称逻辑拆解(绝对禁止第二人称说教)→极简案例→模块收尾闭环',
       typesettingRules: '用「▼」作为模块分隔符，「01.」作为模块编号，大量单句成段，最长段落不超过5句话',
-      viewProgressiveRule: '3个模块从表层→中层→底层，层层递进',
+      viewProgressiveRule: '各模块从表层到中层到底层，层层递进',
     },
     fixedNarrativeParadigm: {
       corePersona: '清醒通透、温柔克制的情感人生导师',
-      narrativeCore: '第二人称「你」贯穿全文，全程以读者为核心',
+      narrativeCore: '以第一人称「我」或第三人称「她们/很多人」贯穿全文，绝对禁止使用居高临下的「你」进行爹味说教',
       empathyLogic: '先戳读者群体痛点→给结论→拆逻辑→案例佐证→情绪安抚',
       firstPersonRule: '仅用于极简案例佐证，单案例不超过2句话，绝对不允许大段个人故事',
       dialoguePosture: '和读者平等对话，引导式输出，不吐槽、不宣泄、不说教',
