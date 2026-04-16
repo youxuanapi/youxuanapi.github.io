@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useToast } from './components/Toast';
 import { ModuleRefinement } from './components/ModuleRefinement';
 import WritingAgentUI from './components/writing-agent/WritingAgentUI';
@@ -106,7 +107,7 @@ const initialState: ArticleState = {
     moduleType: ''
   },
   // 当前工具
-  currentTool: 'article',
+  currentTool: 'writing-agent',
 };
 
 const projects = [
@@ -148,32 +149,28 @@ const communityUpdates = [
 
 const tools = [
   {
-    id: 'article',
-    name: '爆文生成器',
-    icon: 'FileText',
-    desc: '站长自用，实测有效',
-    color: 'from-[#165DFF] to-[#4080FF]'
-  },
-  {
     id: 'comic',
     name: '漫剧生成器',
     icon: 'Image',
     desc: '一键生成爆款漫剧',
-    color: 'from-[#722ED1] to-[#9254DE]'
+    color: 'from-[#722ED1] to-[#9254DE]',
+    isComingSoon: true
   },
   {
     id: 'novel',
     name: '小说生成器',
     icon: 'Book',
     desc: 'AI写作一键生成',
-    color: 'from-[#FA8C16] to-[#FF7A45]'
+    color: 'from-[#FA8C16] to-[#FF7A45]',
+    isComingSoon: true
   },
   {
     id: 'writing-agent',
-    name: '写作Agent',
+    name: '文章生成工具',
     icon: 'Cpu',
-    desc: '专属原创写作系统',
-    color: 'from-[#00C2B8] to-[#009688]'
+    desc: '一键生成高原创文章',
+    color: 'from-[#00C2B8] to-[#009688]',
+    isComingSoon: false
   }
 ];
 
@@ -369,13 +366,21 @@ const ToolCarousel = ({ theme, onToolSelect }: { theme?: Theme; onToolSelect?: (
                   bg-gradient-to-br ${tool.color}
                   shadow-lg hover:shadow-2xl
                   transition-all duration-400 hover:scale-[1.03] hover:-translate-y-1
-                  cursor-pointer
+                  ${tool.isComingSoon ? 'cursor-not-allowed opacity-75' : 'cursor-pointer'}
                 `}
-                onClick={() => onToolSelect?.(tool.id)}
+                onClick={() => !tool.isComingSoon && onToolSelect?.(tool.id)}
               >
                 <div className="absolute top-0 right-0 w-20 h-20 bg-white/15 rounded-full -translate-y-1/2 translate-x-1/2" />
                 <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full translate-y-1/2 -translate-x-1/2" />
                 <div className="absolute top-1/2 right-0 w-16 h-16 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
+                
+                {tool.isComingSoon && (
+                  <div className="absolute top-3 right-3 z-20">
+                    <span className="bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-1 rounded-full shadow-md">
+                      🚀 即将上线
+                    </span>
+                  </div>
+                )}
                 
                 <div className="relative z-10">
                   <div className="w-12 h-12 bg-white/25 rounded-xl flex items-center justify-center mb-4 backdrop-blur-md shadow-inner">
@@ -385,10 +390,16 @@ const ToolCarousel = ({ theme, onToolSelect }: { theme?: Theme; onToolSelect?: (
                   <p className="text-white/85 text-sm leading-relaxed mb-4">{tool.desc}</p>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-white/95">
-                      <span className="text-sm font-semibold">立即使用</span>
-                      <Icon name="ArrowRight" className="w-4 h-4" />
+                      <span className="text-sm font-semibold">
+                        {tool.isComingSoon ? '敬请期待' : '立即使用'}
+                      </span>
+                      {!tool.isComingSoon && (
+                        <Icon name="ArrowRight" className="w-4 h-4" />
+                      )}
                     </div>
-                    <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                    {!tool.isComingSoon && (
+                      <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                    )}
                   </div>
                 </div>
               </div>
@@ -721,6 +732,7 @@ const ContentPreviewModal = ({
 };
 
 export default function Page() {
+  const router = useRouter();
   // 使用 editorStore
   const editorStore = useEditorStore();
   
@@ -751,6 +763,7 @@ export default function Page() {
   const [theme, setTheme] = useState<Theme>('blue');
   const [streamingContent, setStreamingContent] = useState('');
   const [isPaused, setIsPaused] = useState(false);
+  const [activeTool, setActiveTool] = useState<string | null>('writing-agent');
   const abortControllerRef = React.useRef<AbortController | null>(null);
   const { showToast } = useToast();
 
@@ -1582,7 +1595,20 @@ export default function Page() {
                   </div>
                 </div>
                 <ToolCarousel theme={theme} onToolSelect={(toolId) => {
-                  setState(prev => ({ ...prev, currentTool: toolId }));
+                  if (!toolId) return;
+                  
+                  const tool = tools.find(t => t.id === toolId);
+                  if (tool?.isComingSoon) {
+                    return; // 即将上线的工具不处理
+                  }
+                  
+                  setActiveTool(toolId);
+                  
+                  // 滚动到工具使用模块
+                  setTimeout(() => {
+                    const toolModule = document.getElementById('tool-usage-module');
+                    toolModule?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }, 100);
                 }} />
               </Card>
             </div>
@@ -1674,7 +1700,7 @@ export default function Page() {
             </div>
 
             {/* 右侧9列 - 工具使用区域（爆文生成器/API配置） */}
-            <div className="col-span-12 lg:col-span-9 h-full">
+            <div id="tool-usage-module" className="col-span-12 lg:col-span-9 h-full">
               
               {/* API配置页面 - 点击API配置按钮时显示 */}
               {showSettings ? (
@@ -2089,7 +2115,12 @@ export default function Page() {
               ) : (
                 /* 工具使用区域 - 根据当前选中的工具显示不同内容 */
                 <div className="h-full">
-                  {state.currentTool === 'article' ? (
+                  {activeTool === 'writing-agent' ? (
+                    /* 文章生成工具模块 */
+                    <div className="h-full">
+                      <WritingAgentUI />
+                    </div>
+                  ) : activeTool === 'article' ? (
                     /* 爆文生成器模块 */
                     <Card theme={theme} hover={false} className="h-full p-8 flex flex-col items-center justify-center">
                     <div className="w-full max-w-5xl">
@@ -3873,10 +3904,7 @@ export default function Page() {
                 )}
                 </div>
               </Card>
-                  ) : state.currentTool === 'writing-agent' ? (
-                    /* 写作Agent模块 */
-                    <WritingAgentUI />
-                  ) : state.currentTool === 'comic' ? (
+                  ) : activeTool === 'comic' ? (
                     /* 漫剧生成器模块 */
                     <Card theme={theme} hover={false} className="h-full p-8 flex flex-col items-center justify-center">
                       <div className="w-full max-w-2xl text-center">
@@ -3890,7 +3918,7 @@ export default function Page() {
                         </div>
                       </div>
                     </Card>
-                  ) : state.currentTool === 'novel' ? (
+                  ) : activeTool === 'novel' ? (
                     /* 小说生成器模块 */
                     <Card theme={theme} hover={false} className="h-full p-8 flex flex-col items-center justify-center">
                       <div className="w-full max-w-2xl text-center">
@@ -3905,16 +3933,18 @@ export default function Page() {
                       </div>
                     </Card>
                   ) : (
-                    /* 默认显示爆文生成器 */
-                    <Card theme={theme} hover={false} className="h-full p-8 flex flex-col items-center justify-center">
-                      <div className="w-full max-w-2xl text-center">
-                        <div className="w-24 h-24 bg-gradient-to-br from-[#165DFF] to-[#4080FF] rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
-                          <Icon name="FileText" className="w-12 h-12 text-white" />
+                    /* 默认显示提示 - 或者直接显示文章生成工具 */
+                    !activeTool ? (
+                      <Card theme={theme} hover={false} className="h-full p-8 flex flex-col items-center justify-center">
+                        <div className="w-full max-w-2xl text-center">
+                          <div className="w-24 h-24 bg-gradient-to-br from-[#165DFF] to-[#4080FF] rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
+                            <Icon name="FileText" className="w-12 h-12 text-white" />
+                          </div>
+                          <h2 className={`text-2xl font-bold ${t.text} mb-4`}>请选择工具</h2>
+                          <p className={`${t.textSecondary} mb-8`}>点击上方工具库中的工具卡片开始使用</p>
                         </div>
-                        <h2 className={`text-2xl font-bold ${t.text} mb-4`}>请选择工具</h2>
-                        <p className={`${t.textSecondary} mb-8`}>点击上方工具库中的工具卡片开始使用</p>
-                      </div>
-                    </Card>
+                      </Card>
+                    ) : null
                   )}
                 </div>
             )}

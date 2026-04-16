@@ -116,6 +116,12 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
   };
 
   const handleStartTask = async () => {
+    // API Key拦截校验
+    if (!apiConfig?.apiKey || apiConfig.apiKey.trim() === '') {
+      setError('请先配置您的 API Key 以启动生成工具');
+      return;
+    }
+
     if (activeMode === 'create' && !topic.trim()) {
       setError('请输入写作主题');
       return;
@@ -126,8 +132,8 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
       return;
     }
 
-    if (!apiConfig?.apiBaseUrl || !apiConfig?.apiKey || !apiConfig?.model) {
-      setError('请先配置API');
+    if (!apiConfig?.apiBaseUrl || !apiConfig?.model) {
+      setError('请先配置完整的API信息');
       return;
     }
 
@@ -405,7 +411,7 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
                       value={topic}
                       onChange={(e) => setTopic(e.target.value)}
                       placeholder="请输入文章主题或核心需求"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base"
                       disabled={isRunning}
                     />
                   </div>
@@ -430,7 +436,7 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
                           onChange={(e) => setPainPoint(e.target.value)}
                           placeholder="描述目标人群在这个话题下的核心痛点..."
                           rows={3}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base"
                           disabled={isRunning}
                         />
                       </div>
@@ -444,7 +450,7 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
                           onChange={(e) => setDetail(e.target.value)}
                           placeholder="用一个具体的物品或场景来生动证明..."
                           rows={3}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base"
                           disabled={isRunning}
                         />
                       </div>
@@ -458,7 +464,7 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
                           onChange={(e) => setSublimation(e.target.value)}
                           placeholder="给面临类似困境的人一句点醒他们的建议..."
                           rows={3}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base"
                           disabled={isRunning}
                         />
                       </div>
@@ -475,7 +481,7 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
                     onChange={(e) => setSourceArticle(e.target.value)}
                     placeholder="请在此粘贴由其他 AI 生成的初始文本。系统将通过自然语言处理引擎进行深度重写与情感注入，消除机械感，大幅提升文章的真实度与可读性..."
                     rows={12}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-base"
                     disabled={isRunning}
                   />
                 </div>
@@ -514,7 +520,7 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
                             }}
                             placeholder="粘贴原创文章内容..."
                             rows={5}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-base"
                           />
                         </div>
                       ))}
@@ -657,7 +663,7 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
                       onChange={(e) => setReferenceSkeleton(e.target.value)}
                       placeholder="粘贴人类参考文本..."
                       rows={6}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-base"
                       disabled={isRunning}
                     />
                   </div>
@@ -858,12 +864,12 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
                     </div>
                     <div className={isFormatted 
                       ? "mx-auto max-w-2xl text-[16px] md:text-[17px] leading-[2.2] tracking-[0.05em] text-[#3f3f3f]"
-                      : "prose prose-blue max-w-none"
+                      : "prose prose-blue max-w-none text-base leading-loose"
                     }>
                       {isFormatted 
                         ? renderFormattedContent(currentTask.finalDraft || (currentTask.paragraphs?.filter(p => p.content).map(p => p.content).join('\n\n')) || '')
                         : (currentTask.finalDraft || (currentTask.paragraphs?.filter(p => p.content).map(p => p.content).join('\n\n')) || '').split('\n\n').map((paragraph, index) => (
-                            <p key={index} className="mb-4 text-gray-700 leading-relaxed">
+                            <p key={index} className="mb-8 text-gray-700 leading-loose">
                               {paragraph}
                             </p>
                           ))
