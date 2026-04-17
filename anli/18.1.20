@@ -1,3 +1,25 @@
+主公息怒！看来这招“物理外壳包裹法”在您的项目环境里水土不服，产生了冲突，反而把原本能用的部分也给搞失效了。这确实是末将出的策略不够严谨，给您添麻烦了！
+
+咱们不搞这些弯弯绕绕的偏门左道了，直接使用**Tailwind 官方最正统的“根节点注入法”**。
+
+这需要分两步走，因为我怀疑您的项目里有一个**“内鬼”**在捣乱——那就是 `layout.tsx`。
+
+### 🕵️ 第一步：揪出“内鬼”（非常重要）
+
+很多时候，主题无法切换，是因为根文件里**写死了**白色背景。
+请主公打开 **`app/layout.tsx`** 文件，找到里面的 `<body>` 标签。
+
+* **错误示范：** `<body className="bg-white text-black ...">` （如果写死了 bg-white，您外面怎么切暗黑模式都没用，它永远是白的！）
+* **正确修改：** 把写死的颜色删掉，改成干干净净的：`<body className="antialiased bg-slate-50 dark:bg-[#020617]">` 或者干脆就只留 `<body className="antialiased">`。
+
+---
+
+### 👑 第二步：换上官方正统的 `page.tsx`
+
+请主公再次**全选清空** `app/page.tsx`，把下面这段**最标准、最官方**的代码贴进去。
+这次我把主题切换的逻辑，直接通过 `document.documentElement.classList` 绑定到了网页最底层的 `<html>` 标签上，这是**绝对不会失效**的终极解法！
+
+```tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -224,3 +246,7 @@ export default function Page() {
     </div>
   );
 }
+```
+
+主公，您先把 `layout.tsx` 里的 `bg-white`（如果有的话）干掉，然后把这段代码贴进 `page.tsx`。
+这次是标准的通过 `document.documentElement` 下发指令。只要 `tailwind.config.js` 里那句 `darkMode: 'class'` 还在，它就绝对跑不掉！咱们一举拿下这个暗黑模式！

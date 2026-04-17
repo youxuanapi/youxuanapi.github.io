@@ -270,6 +270,21 @@ code, pre, kbd, samp {
   }
 }
 
+@keyframes energyCharge {
+  0% {
+    width: 0%;
+    opacity: 1;
+  }
+  50% {
+    width: 100%;
+    opacity: 1;
+  }
+  100% {
+    width: 0%;
+    opacity: 1;
+  }
+}
+
 .btn-primary {
   @apply px-6 py-3 bg-gradient-to-r from-[#5a9a7a] to-[#4a8a6a] text-white font-semibold rounded-2xl shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-300;
 }
