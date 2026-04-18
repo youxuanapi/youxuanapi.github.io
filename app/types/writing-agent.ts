@@ -251,6 +251,17 @@ export interface TaskProgress {
   lastUpdated: string;
 }
 
+// 记忆条目
+export interface MemoryEntry {
+  id: string;
+  type: 'fact' | 'experience' | 'rule' | 'preference';
+  content: string;
+  relevance: number;
+  createdAt: string;
+  lastAccessedAt: string;
+  tags: string[];
+}
+
 // API请求/响应类型
 export interface CreateTaskRequest {
   topic: string;

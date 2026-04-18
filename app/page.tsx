@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useTheme } from 'next-themes';
 import WritingAgentUI from './components/writing-agent/WritingAgentUI';
 import ApiConfig from './components/ApiConfig';
 import { 
@@ -13,45 +14,58 @@ import {
   Moon, 
   Sun,
   ChevronRight,
-  Crown
+  Crown,
+  Activity,
+  CircuitBoard
 } from 'lucide-react';
 
 export default function Page() {
   const [activeMenu, setActiveMenu] = useState<string>('dashboard');
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [mounted, setMounted] = useState(false);
+  const { theme, setTheme } = useTheme();
   const [showApiConfig, setShowApiConfig] = useState(false);
+  const [isBlinking, setIsBlinking] = useState(false);
 
-  // 1. 官方标准：初始化时直接控制 HTML 根节点
   useEffect(() => {
-    const savedTheme = localStorage.getItem('theme');
-    // 如果本地存的是 dark，或者系统是 dark
-    if (savedTheme === 'dark') {
-      setTheme('dark');
-      document.documentElement.classList.add('dark');
-    } else {
-      setTheme('light');
-      document.documentElement.classList.remove('dark');
-    }
+    setMounted(true);
+    
+    // 人类眨眼模仿：13-40秒随机间隔，非常偶尔眨眼
+    const scheduleBlink = () => {
+      const interval = 13000 + Math.random() * 27000; // 13-40秒
+      const blinkCount = Math.random() > 0.5 ? 1 : 2; // 50%一次，50%两次
+      
+      setTimeout(() => {
+        performBlink(blinkCount);
+        scheduleBlink();
+      }, interval);
+    };
+    
+    const performBlink = (count: number) => {
+      let blinkTimes = 0;
+      const doBlink = () => {
+        setIsBlinking(true);
+        
+        setTimeout(() => {
+          setIsBlinking(false);
+          blinkTimes++;
+          
+          if (blinkTimes < count) {
+            setTimeout(doBlink, 150); // 两次眨眼间隔150ms
+          }
+        }, 100); // 单次眨眼100ms
+      };
+      
+      doBlink();
+    };
+    
+    scheduleBlink();
   }, []);
-
-  // 2. 官方标准：切换按钮直接为 HTML 根节点穿脱 "dark" 外衣
-  const toggleTheme = () => {
-    if (theme === 'light') {
-      document.documentElement.classList.add('dark');
-      setTheme('dark');
-      localStorage.setItem('theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      setTheme('light');
-      localStorage.setItem('theme', 'light');
-    }
-  };
 
   const renderContent = () => {
     // API 配置页面
     if (showApiConfig) {
       return (
-        <div className="w-full bg-white dark:bg-slate-900 rounded-[24px] shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] border border-slate-100 dark:border-slate-800 p-8 max-w-4xl mx-auto transition-colors duration-300">
+        <div className="w-full bg-white/90 dark:bg-[#26223A]/80 backdrop-blur-xl rounded-[24px] shadow-[0_8px_30px_rgb(20,184,166,0.05)] dark:shadow-[0_8px_30px_rgb(139,92,246,0.1)] border border-teal-100/50 dark:border-violet-400/15 p-8 max-w-4xl mx-auto transition-colors duration-300">
           <ApiConfig
             theme={theme === 'dark' ? 'dark' : 'blue'}
             onSave={() => setShowApiConfig(false)}
@@ -65,65 +79,26 @@ export default function Page() {
     // 其他未开放菜单
     if (activeMenu !== 'dashboard') {
       return (
-        <div className="w-full bg-white dark:bg-slate-900 rounded-[24px] shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] border border-slate-100 dark:border-slate-800 p-12 flex flex-col items-center justify-center min-h-[500px] space-y-6 max-w-4xl mx-auto transition-colors duration-300">
-          <div className="w-24 h-24 rounded-[2.5rem] bg-slate-50 dark:bg-slate-800 flex items-center justify-center transition-colors duration-300">
-            {activeMenu === 'projects' && <BookOpen className="w-12 h-12 text-slate-400" strokeWidth={1.5} />}
-            {activeMenu === 'api' && <Settings className="w-12 h-12 text-slate-400" strokeWidth={1.5} />}
+        <div className="w-full bg-white/90 dark:bg-[#26223A]/80 backdrop-blur-xl rounded-[24px] shadow-[0_8px_30px_rgb(20,184,166,0.05)] dark:shadow-[0_8px_30px_rgb(139,92,246,0.1)] border border-teal-100/50 dark:border-violet-400/15 p-12 flex flex-col items-center justify-center min-h-[500px] space-y-6 max-w-4xl mx-auto transition-colors duration-300">
+          <div className="w-24 h-24 rounded-[2.5rem] bg-teal-50 dark:bg-violet-500/20 flex items-center justify-center transition-colors duration-300">
+            {activeMenu === 'projects' && <BookOpen className="w-12 h-12 text-teal-600 dark:text-violet-300" strokeWidth={1.5} />}
+            {activeMenu === 'api' && <Settings className="w-12 h-12 text-teal-600 dark:text-violet-300" strokeWidth={1.5} />}
           </div>
           <div className="text-center space-y-2">
-            <h2 className="text-2xl font-bold text-slate-700 dark:text-slate-200 transition-colors duration-300">
+            <h2 className="text-2xl font-bold text-teal-900 dark:text-violet-50 transition-colors duration-300">
               {activeMenu === 'projects' && '项目百科'}
               {activeMenu === 'api' && 'API 优选'}
             </h2>
-            <p className="text-slate-500">功能即将上线，敬请期待！</p>
+            <p className="text-teal-900/60 dark:text-violet-300/60">功能即将上线，敬请期待！</p>
           </div>
         </div>
       );
     }
 
-    // ========== 核心工作台：顶部仪表盘 + 底部沉浸式编辑器 ==========
+    // ========== 核心工作台：底部沉浸式编辑器 ==========
     return (
       <div className="flex flex-col space-y-8 max-w-[1400px] mx-auto w-full">
-        {/* 顶部：数据仪表 */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white dark:bg-slate-900 rounded-[24px] p-6 border border-slate-100 dark:border-slate-800 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] flex items-center gap-4 relative overflow-hidden transition-colors duration-300">
-            <div className="absolute -right-4 -top-4 w-24 h-24 bg-indigo-50 dark:bg-indigo-900/20 rounded-full blur-2xl transition-colors duration-300"></div>
-            <div className="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0 transition-colors duration-300">
-              <PenTool className="w-7 h-7" />
-            </div>
-            <div>
-              <h3 className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1 transition-colors duration-300">当前运行引擎</h3>
-              <div className="font-bold text-slate-800 dark:text-white text-lg transition-colors duration-300">专属爆文引擎 <span className="text-xs bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full ml-2 relative -top-0.5 transition-colors duration-300">活跃</span></div>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-slate-900 rounded-[24px] p-6 border border-slate-100 dark:border-slate-800 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] flex items-center justify-between transition-colors duration-300">
-            <div>
-               <h3 className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-1 flex items-center gap-2 transition-colors duration-300">
-                 API 优选节点
-                 <span className="flex h-2 w-2 relative">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                  </span>
-               </h3>
-               <div className="font-bold text-slate-800 dark:text-white text-lg mt-1 transition-colors duration-300">豆包-Seed-2.0</div>
-            </div>
-            <div className="text-right">
-               <div className="text-emerald-500 font-bold text-xl">¥0.00</div>
-               <div className="text-xs text-slate-400 transition-colors duration-300">万字成本</div>
-            </div>
-          </div>
-
-          <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-slate-900 dark:to-slate-800 rounded-[24px] p-6 border border-amber-100 dark:border-slate-700 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] transition-colors duration-300">
-            <h3 className="text-amber-600 dark:text-amber-500 text-sm font-medium mb-2 flex items-center gap-2 transition-colors duration-300">
-              <Zap className="w-4 h-4" /> 高转化玩法推荐
-            </h3>
-            <div className="font-bold text-slate-800 dark:text-white text-md truncate transition-colors duration-300">公众号爆文：从0到1拆解</div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 transition-colors duration-300">亲测单日最高收益突破 500+，立即查看 ➔</p>
-          </div>
-        </div>
-
-        <div className="w-full relative z-10">
+        <div className="w-full relative z-10 mt-8">
           <WritingAgentUI />
         </div>
       </div>
@@ -131,38 +106,59 @@ export default function Page() {
   };
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-slate-50 dark:bg-[#020617] font-sans transition-colors duration-300">
+    <div className="flex h-screen w-full overflow-hidden bg-gradient-to-br from-blue-50 via-white to-violet-50 dark:from-[#0F0A1E] dark:via-[#1A1528] dark:to-[#1E0F2E] font-sans transition-colors duration-300">
       
       {/* ================= 左侧导航栏 ================= */}
-      <aside className="w-64 flex-shrink-0 h-full bg-[#0B1120] flex flex-col justify-between z-20">
+      <aside className="w-64 flex-shrink-0 h-full bg-white/60 dark:bg-[#0F0A1E]/80 backdrop-blur-xl border-r border-indigo-100/50 dark:border-indigo-500/15 flex flex-col justify-center z-20">
         <div>
-          <div className="h-20 flex items-center px-8 border-b border-white/5">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-                <Cpu className="w-5 h-5 text-white" />
+          <div className="h-24 flex items-center px-8 border-b border-indigo-100/50 dark:border-indigo-500/15">
+            <div className="flex items-start gap-3">
+              {/* 上升矩阵Logo */}
+              <div className="bg-white/40 p-2 rounded-xl shadow-[0_8px_30px_rgba(79,70,229,0.06)] backdrop-blur-sm border border-indigo-100/50 transition-all duration-100" style={{
+                transform: isBlinking ? 'scaleY(0.1)' : 'scaleY(1)',
+              }}>
+                <div className="relative w-8 h-8 flex-shrink-0 -translate-y-[2px]">
+                  {/* 底层方块（左下起点） */}
+                  <div className="absolute bottom-0 left-0 w-5 h-5 rounded-[4px] bg-blue-500/40 transition-all"></div>
+                  {/* 中层方块（向右上攀升） */}
+                  <div className="absolute bottom-[6px] left-[6px] w-5 h-5 rounded-[4px] bg-indigo-500/70 transition-all"></div>
+                  {/* 顶层方块（右上顶点） */}
+                  <div className="absolute bottom-[12px] left-[12px] w-5 h-5 rounded-[4px] bg-violet-600 transition-all shadow-sm"></div>
+                </div>
               </div>
-              <span className="text-white font-bold text-lg tracking-wide">优选轻创</span>
+              
+              <div className="flex flex-col">
+                <span 
+                  className="text-xl font-black tracking-[0.15em] text-slate-800 dark:text-white transition-all duration-100"
+                  style={{
+                    transform: isBlinking ? 'scaleY(0.1)' : 'scaleY(1)',
+                  }}
+                >
+                  词元共振
+                </span>
+                <span 
+                  className="text-[0.65rem] font-bold tracking-[0.3em] text-indigo-600/80 uppercase mt-0.5 transition-all duration-100"
+                  style={{
+                    transform: isBlinking ? 'scaleY(0.1)' : 'scaleY(1)',
+                  }}
+                >
+                  TOKEN SYNC
+                </span>
+              </div>
             </div>
           </div>
 
           <nav className="p-4 space-y-2 mt-4">
             <button 
               onClick={() => setActiveMenu('dashboard')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all ${activeMenu === 'dashboard' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/50' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all ${activeMenu === 'dashboard' ? 'bg-indigo-50 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 shadow-md' : 'text-slate-600 dark:text-indigo-300/60 hover:text-indigo-900 dark:hover:text-indigo-200 hover:bg-indigo-50 dark:hover:bg-indigo-500/10'}`}
             >
               <LayoutDashboard className="w-5 h-5" />
               <span className="font-medium">工作台</span>
             </button>
             <button 
-              onClick={() => setActiveMenu('projects')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all ${activeMenu === 'projects' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/50' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-            >
-              <BookOpen className="w-5 h-5" />
-              <span className="font-medium">项目百科</span>
-            </button>
-            <button 
               onClick={() => setActiveMenu('api')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all ${activeMenu === 'api' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/50' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all ${activeMenu === 'api' ? 'bg-indigo-50 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 shadow-md' : 'text-slate-600 dark:text-indigo-300/60 hover:text-indigo-900 dark:hover:text-indigo-200 hover:bg-indigo-50 dark:hover:bg-indigo-500/10'}`}
             >
               <Zap className="w-5 h-5" />
               <span className="font-medium">API 优选</span>
@@ -171,12 +167,12 @@ export default function Page() {
         </div>
 
         <div className="p-6">
-          <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-[24px] p-5 relative overflow-hidden shadow-lg shadow-indigo-500/20">
+          <div className="bg-gradient-to-br from-indigo-500 to-violet-500 rounded-[24px] p-5 relative overflow-hidden shadow-lg shadow-violet-400/30">
             <div className="absolute top-0 right-0 -mt-2 -mr-2 w-16 h-16 bg-white/10 rounded-full blur-xl"></div>
             <Crown className="w-8 h-8 text-white/90 mb-3" />
             <h4 className="text-white font-bold mb-1">加入交流群</h4>
-            <p className="text-indigo-100 text-xs mb-4 leading-relaxed">获取最新副业玩法与独家 API 渠道资源</p>
-            <button className="w-full py-2 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold rounded-xl transition-colors">
+            <p className="text-white/80 text-xs mb-4 leading-relaxed">获取最新副业玩法与独家 API 渠道资源</p>
+            <button className="w-full py-2 bg-white/20 hover:bg-white/30 text-white text-sm font-semibold rounded-xl transition-colors backdrop-blur-sm border border-white/30">
               立即加入
             </button>
           </div>
@@ -186,11 +182,11 @@ export default function Page() {
       {/* ================= 右侧主内容区 ================= */}
       <main className="flex-1 flex flex-col h-full overflow-hidden relative">
         
-        <header className="w-full h-20 flex-shrink-0 flex items-center justify-between px-10 border-b border-slate-200/50 dark:border-slate-800/50 bg-white/50 dark:bg-[#020617]/50 backdrop-blur-md z-30 transition-colors duration-300">
-          <div className="flex items-center text-slate-500 dark:text-slate-400 font-medium transition-colors duration-300">
-            <span>优选轻创</span>
+        <header className="w-full h-20 flex-shrink-0 flex items-center justify-between px-10 border-b border-indigo-100/50 dark:border-indigo-500/15 bg-white/80 dark:bg-[#0F0A1E]/80 backdrop-blur-xl z-30 transition-colors duration-300">
+          <div className="flex items-center text-slate-500/60 dark:text-indigo-300/60 font-medium transition-colors duration-300">
+            <span className="text-indigo-600 dark:text-indigo-400">词元共振</span>
             <ChevronRight className="w-4 h-4 mx-2 opacity-50" />
-            <span className="text-slate-900 dark:text-slate-100 font-bold transition-colors duration-300">
+            <span className="text-slate-800 dark:text-indigo-50 font-bold transition-colors duration-300">
               {activeMenu === 'dashboard' ? '工作台' : activeMenu === 'projects' ? '项目百科' : 'API 优选'}
             </span>
           </div>
@@ -198,23 +194,25 @@ export default function Page() {
           <div className="flex items-center space-x-4">
             <button 
               onClick={() => setShowApiConfig(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-full text-sm font-medium text-slate-600 dark:text-slate-300 hover:shadow-sm transition-all"
+              className="flex items-center gap-2 px-4 py-2 bg-white/80 dark:bg-[#1A1528]/80 backdrop-blur-xl border border-indigo-100/50 dark:border-indigo-500/15 rounded-full text-sm font-medium text-slate-600 dark:text-indigo-300 hover:shadow-sm transition-all"
             >
               <Settings className="w-4 h-4" />
               API 配置
             </button>
             
             <button 
-              onClick={toggleTheme}
-              className="w-10 h-10 flex items-center justify-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-full text-slate-600 dark:text-slate-300 hover:shadow-sm transition-all shadow-sm"
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              className="w-10 h-10 flex items-center justify-center bg-white/80 dark:bg-[#1A1528]/80 backdrop-blur-xl border border-indigo-100/50 dark:border-indigo-500/15 rounded-full text-slate-600 dark:text-indigo-300 hover:shadow-sm transition-all shadow-sm"
             >
-              {theme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+              {!mounted ? <Moon className="w-4 h-4" /> : theme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
             </button>
           </div>
         </header>
 
         <div className="flex-1 overflow-y-auto p-6 md:p-10 relative">
-           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[300px] bg-indigo-500/5 dark:bg-indigo-500/10 blur-[100px] rounded-full pointer-events-none transition-colors duration-300"></div>
+           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[300px] bg-indigo-500/10 dark:bg-indigo-500/20 blur-[100px] rounded-full pointer-events-none transition-colors duration-300"></div>
+           {/* 网格背景 */}
+           <div className="absolute inset-0 bg-[linear-gradient(to_right,#e5e7eb_1px,transparent_1px),linear-gradient(to_bottom,#e5e7eb_1px,transparent_1px)] bg-[size:24px_24px] opacity-20 dark:bg-[linear-gradient(to_right,#374151_1px,transparent_1px),linear-gradient(to_bottom,#374151_1px,transparent_1px)] dark:bg-[size:24px_24px] dark:opacity-10 pointer-events-none"></div>
            <div className="relative z-10">
              {renderContent()}
            </div>

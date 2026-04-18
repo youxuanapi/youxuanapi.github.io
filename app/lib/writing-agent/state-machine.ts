@@ -7,7 +7,7 @@ import type {
   ValidationResult,
   AgentContext,
   TokenBudget,
-} from '../types/writing-agent';
+} from '../../types/writing-agent';
 
 export type TransitionType = 
   | 'INIT'

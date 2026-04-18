@@ -4,6 +4,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import type {
   WritingTask,
   TaskStatus,
+  ParagraphStatus,
   Outline,
   Paragraph,
   WritingPersona,
@@ -142,8 +143,8 @@ export const useWritingAgentStore = create<WritingAgentStore>()(
               state.currentTask.paragraphs = sections.map((section, index) => ({
                 id: generateId(),
                 sectionId: section.id,
-                sectionIndex: index,
-                status: 'pending',
+                index,
+                status: 'pending' as ParagraphStatus,
                 retryCount: 0,
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),

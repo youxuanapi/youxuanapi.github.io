@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ToastProvider } from "./components/Toast";
+import { ThemeProvider } from "./components/ThemeProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -18,8 +19,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "优选AI轻创 - AI轻创业一站式服务",
-  description: "从爆文写作到全品类副业，全套工具+完整SOP，照着做就能复制！原优选API",
+  title: "词元共振 - 新一代全矩阵 AI 创作引擎",
+  description: "基于底层词元推演的高阶 AI 创作工坊，为您打造爆款文章、小说与短剧。",
 };
 
 export default function RootLayout({
@@ -29,11 +30,14 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="zh-CN"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
+        lang="zh-CN"
+        suppressHydrationWarning
+        className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      >
       <body className="min-h-full flex flex-col">
-        <ToastProvider>{children}</ToastProvider>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+          <ToastProvider>{children}</ToastProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

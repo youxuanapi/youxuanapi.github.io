@@ -97,20 +97,20 @@ export default function DashboardLayout({
 
   // 颜色变量 - 参考之前的globals.css设计
   const bgGradient = isDark 
-    ? 'linear-gradient(135deg, #050508 0%, #0a0a15 50%, #1a1a2e 100%)'
+    ? 'linear-gradient(135deg, #050508 0%, #1a1528 50%, #1e0f2e 100%)'
     : 'linear-gradient(135deg, #fdfcf8 0%, #f5f9f6 50%, #faf4f4 100%)';
-  const bgColor = isDark ? '#0a0a15' : '#f5f9f6'; // 用于挖空效果
-  const sidebarBg = isDark ? 'bg-[#0a0a15]' : 'bg-slate-900';
-  const cardBg = isDark ? 'bg-[#1a1a2e]' : 'bg-white';
+  const bgColor = isDark ? '#1a1528' : '#f5f9f6'; // 用于挖空效果
+  const sidebarBg = isDark ? 'bg-[#050508]/80' : 'bg-white/60';
+  const cardBg = isDark ? 'bg-[#1a1528]' : 'bg-white';
   const textColor = isDark ? 'text-[#e5e5e3]' : 'text-slate-900';
   const textMuted = isDark ? 'text-slate-400' : 'text-slate-500';
-  const borderColor = isDark ? 'border-[#3b82f6]/30' : 'border-slate-200';
+  const borderColor = isDark ? 'border-violet-500/30' : 'border-slate-200';
   const cardShadow = isDark 
     ? 'shadow-[0_20px_50px_rgba(0,0,0,0.4)]' 
     : 'shadow-[0_20px_50px_rgba(0,0,0,0.02)]';
   const gridBg = isDark 
-    ? 'linear-gradient(rgba(148,163,184,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.05) 1px, transparent 1px)'
-    : 'linear-gradient(rgba(148,163,184,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.1) 1px, transparent 1px)';
+    ? 'linear-gradient(rgba(139,92,246,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(139,92,246,0.05) 1px, transparent 1px)'
+    : 'linear-gradient(rgba(79,70,229,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(79,70,229,0.1) 1px, transparent 1px)';
 
   return (
     <div className={cn('min-h-screen flex flex-col', className)} style={{ background: bgGradient }}>
@@ -153,8 +153,8 @@ export default function DashboardLayout({
             <Sparkles className="w-5 h-5 text-white" strokeWidth={1.5} />
           </div>
           <div className="text-left">
-            <h1 className="font-bold text-base" style={{ color: isDark ? '#f1f5f9' : '#1e293b' }}>优选AI轻创</h1>
-            <p className="text-xs" style={{ color: isDark ? '#64748b' : '#64748b' }}>AI轻创业平台</p>
+            <h1 className="font-bold text-base" style={{ color: isDark ? '#f1f5f9' : '#1e293b' }}>词元共振</h1>
+            <p className="text-xs" style={{ color: isDark ? '#64748b' : '#64748b' }}>新一代全矩阵 AI 创作引擎</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -181,8 +181,8 @@ export default function DashboardLayout({
                 <Sparkles className="w-6 h-6 text-white" strokeWidth={1.5} />
               </div>
               <div>
-                <h1 className="font-bold text-white text-lg">优选AI轻创</h1>
-                <p className="text-slate-500 text-xs">AI轻创业一站式服务</p>
+                <h1 className="font-bold text-white text-lg">词元共振</h1>
+                <p className="text-slate-500 text-xs">新一代全矩阵 AI 创作引擎</p>
               </div>
             </div>
           </div>
@@ -278,7 +278,7 @@ export default function DashboardLayout({
                     <Sparkles className="w-6 h-6 text-white" strokeWidth={1.5} />
                   </div>
                   <div>
-                    <h1 className="font-bold text-white text-lg">优选AI轻创</h1>
+                    <h1 className="font-bold text-white text-lg">词元共振</h1>
                   </div>
                 </div>
                 <button
