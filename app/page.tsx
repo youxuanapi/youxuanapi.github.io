@@ -105,11 +105,13 @@ export default function Page() {
     );
   };
 
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
   return (
     <div className="flex h-screen w-full overflow-hidden bg-gradient-to-br from-blue-50 via-white to-violet-50 dark:from-[#0F0A1E] dark:via-[#1A1528] dark:to-[#1E0F2E] font-sans transition-colors duration-300">
       
       {/* ================= 左侧导航栏 ================= */}
-      <aside className="w-64 flex-shrink-0 h-full bg-white/60 dark:bg-[#0F0A1E]/80 backdrop-blur-xl border-r border-indigo-100/50 dark:border-indigo-500/15 flex flex-col justify-center z-20">
+      <aside className="hidden md:flex w-64 flex-shrink-0 h-full bg-white/60 dark:bg-[#0F0A1E]/80 backdrop-blur-xl border-r border-indigo-100/50 dark:border-indigo-500/15 flex flex-col justify-center z-20">
         <div>
           <div className="h-24 flex items-center px-8 border-b border-indigo-100/50 dark:border-indigo-500/15">
             <div className="flex items-start gap-3">
@@ -179,16 +181,88 @@ export default function Page() {
         </div>
       </aside>
 
+      {/* ================= 移动端侧边栏覆盖层 ================= */}
+      {isSidebarOpen && (
+        <div 
+          className="md:hidden fixed inset-0 bg-black/50 z-40"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
+      {/* ================= 移动端侧边栏 ================= */}
+      <aside className="md:hidden fixed left-0 top-0 bottom-0 w-64 bg-white/95 dark:bg-[#0F0A1E]/95 backdrop-blur-xl border-r border-indigo-100/50 dark:border-indigo-500/15 flex flex-col justify-center z-50 transform transition-transform duration-300 ease-in-out"
+        style={{ transform: isSidebarOpen ? 'translateX(0)' : 'translateX(-100%)' }}
+      >
+        <div className="absolute top-6 right-6">
+          <button 
+            onClick={() => setIsSidebarOpen(false)}
+            className="flex items-center justify-center w-10 h-10 bg-white/80 dark:bg-[#1A1528]/80 backdrop-blur-xl border border-indigo-100/50 dark:border-indigo-500/15 rounded-full text-slate-600 dark:text-indigo-300 hover:shadow-sm transition-all"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div>
+          <div className="h-24 flex items-center px-8 border-b border-indigo-100/50 dark:border-indigo-500/15">
+            <div className="flex items-start gap-3">
+              {/* 上升矩阵Logo */}
+              <div className="bg-white/40 p-2 rounded-xl shadow-[0_8px_30px_rgba(79,70,229,0.06)] backdrop-blur-sm border border-indigo-100/50 transition-all duration-100" style={{ transform: isBlinking ? 'scaleY(0.1)' : 'scaleY(1)' }}>
+                <div className="relative w-8 h-8 flex-shrink-0 -translate-y-[2px]">
+                  {/* 底层方块（左下起点） */}
+                  <div className="absolute bottom-0 left-0 w-5 h-5 rounded-[4px] bg-blue-500/40 transition-all"></div>
+                  {/* 中层方块（向右上攀升） */}
+                  <div className="absolute bottom-[6px] left-[6px] w-5 h-5 rounded-[4px] bg-indigo-500/70 transition-all"></div>
+                  {/* 顶层方块（右上顶点） */}
+                  <div className="absolute bottom-[12px] left-[12px] w-5 h-5 rounded-[4px] bg-violet-600 transition-all shadow-sm"></div>
+                </div>
+              </div>
+              
+              <div className="flex flex-col">
+                <span className="text-xl font-black tracking-[0.15em] text-slate-800 dark:text-white transition-all duration-100" style={{ transform: isBlinking ? 'scaleY(0.1)' : 'scaleY(1)' }}>词元共振</span>
+                <span className="text-[0.65rem] font-bold tracking-[0.3em] text-indigo-600/80 uppercase mt-0.5 transition-all duration-100" style={{ transform: isBlinking ? 'scaleY(0.1)' : 'scaleY(1)' }}>TOKEN SYNC</span>
+              </div>
+            </div>
+          </div>
+
+          <nav className="p-4 space-y-2 mt-4">
+            <button onClick={() => { setActiveMenu('dashboard'); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all ${activeMenu === 'dashboard' ? 'bg-indigo-50 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 shadow-md' : 'text-slate-600 dark:text-indigo-300/60 hover:text-indigo-900 dark:hover:text-indigo-200 hover:bg-indigo-50 dark:hover:bg-indigo-500/10'}`}>
+              <LayoutDashboard className="w-5 h-5" />
+              <span className="font-medium">工作台</span>
+            </button>
+            <button onClick={() => { setActiveMenu('api'); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all ${activeMenu === 'api' ? 'bg-indigo-50 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 shadow-md' : 'text-slate-600 dark:text-indigo-300/60 hover:text-indigo-900 dark:hover:text-indigo-200 hover:bg-indigo-50 dark:hover:bg-indigo-500/10'}`}>
+              <Zap className="w-5 h-5" />
+              <span className="font-medium">API 优选</span>
+            </button>
+          </nav>
+        </div>
+
+        <div className="p-6">
+          <div className="bg-gradient-to-br from-indigo-500 to-violet-500 rounded-[24px] p-5 relative overflow-hidden shadow-lg shadow-violet-400/30">
+            <div className="absolute top-0 right-0 -mt-2 -mr-2 w-16 h-16 bg-white/10 rounded-full blur-xl"></div>
+            <Crown className="w-8 h-8 text-white/90 mb-3" />
+            <h4 className="text-white font-bold mb-1">加入交流群</h4>
+            <p className="text-white/80 text-xs mb-4 leading-relaxed">获取最新副业玩法与独家 API 渠道资源</p>
+            <button className="w-full py-2 bg-white/20 hover:bg-white/30 text-white text-sm font-semibold rounded-xl transition-colors backdrop-blur-sm border border-white/30">立即加入</button>
+          </div>
+        </div>
+      </aside>
+
       {/* ================= 右侧主内容区 ================= */}
       <main className="flex-1 flex flex-col h-full overflow-hidden relative">
         
-        <header className="w-full h-20 flex-shrink-0 flex items-center justify-between px-10 border-b border-indigo-100/50 dark:border-indigo-500/15 bg-white/80 dark:bg-[#0F0A1E]/80 backdrop-blur-xl z-30 transition-colors duration-300">
-          <div className="flex items-center text-slate-500/60 dark:text-indigo-300/60 font-medium transition-colors duration-300">
-            <span className="text-indigo-600 dark:text-indigo-400">词元共振</span>
-            <ChevronRight className="w-4 h-4 mx-2 opacity-50" />
-            <span className="text-slate-800 dark:text-indigo-50 font-bold transition-colors duration-300">
-              {activeMenu === 'dashboard' ? '工作台' : activeMenu === 'projects' ? '项目百科' : 'API 优选'}
-            </span>
+        <header className="w-full h-20 flex-shrink-0 flex items-center justify-between px-4 md:px-10 border-b border-indigo-100/50 dark:border-indigo-500/15 bg-white/80 dark:bg-[#0F0A1E]/80 backdrop-blur-xl z-30 transition-colors duration-300">
+          <div className="flex items-center gap-4">
+            {/* 移动端汉堡菜单 */}
+            <button 
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className="md:hidden flex items-center justify-center w-10 h-10 bg-white/80 dark:bg-[#1A1528]/80 backdrop-blur-xl border border-indigo-100/50 dark:border-indigo-500/15 rounded-full text-slate-600 dark:text-indigo-300 hover:shadow-sm transition-all"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+
           </div>
 
           <div className="flex items-center space-x-4">
@@ -209,7 +283,7 @@ export default function Page() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-6 md:p-10 relative">
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-10 relative">
            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[300px] bg-indigo-500/10 dark:bg-indigo-500/20 blur-[100px] rounded-full pointer-events-none transition-colors duration-300"></div>
            {/* 网格背景 */}
            <div className="absolute inset-0 bg-[linear-gradient(to_right,#e5e7eb_1px,transparent_1px),linear-gradient(to_bottom,#e5e7eb_1px,transparent_1px)] bg-[size:24px_24px] opacity-20 dark:bg-[linear-gradient(to_right,#374151_1px,transparent_1px),linear-gradient(to_bottom,#374151_1px,transparent_1px)] dark:bg-[size:24px_24px] dark:opacity-10 pointer-events-none"></div>

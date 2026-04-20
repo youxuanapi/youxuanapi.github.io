@@ -188,8 +188,21 @@ async function getAIFallbackOutline(
 ): Promise<OutlineV2> {
   const safePersona = persona || {};
   
-  const systemPrompt = '你是一个大纲生成器。请根据主题输出严格的 JSON，不要包含任何 markdown 符号。必须包含开头、动态数量的平行递进模块、结尾。绝对禁止使用第二人称说教。';
-  const userPrompt = `写作主题: ${topic}。请立即生成大纲。`;
+  const systemPrompt = `你是一个顶级的自媒体爆款大纲规划师。
+请深度分析用户给出的【写作主题】，判断其最适合的文章结构（如：数字盘点型、痛点解决型、故事递进型等），并动态生成一份极其专业的文章大纲。
+
+【绝对强制约束】
+1. 必须输出合法的 JSON 对象，不要包含任何 markdown 代码块（如 \`\`\`json）。
+2. JSON 必须且只能包含两个字段："coreValueLine" (字符串，全文核心价值) 和 "sections" (数组)。
+3. sections 数组代表文章段落，数量由你根据标题语义自行决定（一般包含开头、2-5个递进的主体模块、结尾）。
+4. sections 数组中的每个对象必须包含以下字段：
+   - corePosition (string): 本段核心定位和要求
+   - weight (number): 权重分数（总和约为100）
+   - wordRange (object): { "min": 200, "max": 300 }
+   - coreKeyPoints (string数组): 本段必须写到的3-5个关键点（必须用第一或第三人称，绝对禁止写"使用第二人称说教"）
+   - emotionRhythm (string): 本段的情绪节奏
+   - mainLineRelevance (string): 与主线的关联`;
+  const userPrompt = `写作主题：《${topic}》。请分析该主题的最佳叙事结构，并直接输出 JSON 格式的结构大纲。`;
   
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 5000);

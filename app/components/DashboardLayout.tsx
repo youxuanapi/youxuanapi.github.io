@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Home, BookOpen, Settings, Plus, Cpu, Image, Book, Zap, TrendingUp, Target, Layers, Sparkles, Sun, Moon, Key } from 'lucide-react';
+import { Home, BookOpen, Settings, Plus, Cpu, Image, Book, Zap, TrendingUp, Target, Layers, Sparkles, Sun, Moon, Key, Menu, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 type MenuItem = {
@@ -141,12 +141,16 @@ export default function DashboardLayout({
       )}
 
       {/* Mobile Header */}
-      <div className="md:hidden flex items-center justify-between p-4 border-b relative z-10" style={{ borderColor: isDark ? '#1e293b' : '#e2e8f0' }}>
+      <div className="md:hidden flex items-center justify-between p-4 border-b fixed top-0 left-0 right-0 z-20 shadow-md" style={{ borderColor: isDark ? '#1e293b' : '#e2e8f0', background: isDark ? '#050508' : '#ffffff' }}>
         <button
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           className={cn('p-2 rounded-xl', isDark ? 'hover:bg-slate-800' : 'hover:bg-slate-100')}
         >
-          <Layers className="w-6 h-6" style={{ color: isDark ? '#f1f5f9' : '#1e293b' }} strokeWidth={1.5} />
+          {isMobileMenuOpen ? (
+            <X className="w-6 h-6" style={{ color: isDark ? '#f1f5f9' : '#1e293b' }} strokeWidth={1.5} />
+          ) : (
+            <Menu className="w-6 h-6" style={{ color: isDark ? '#f1f5f9' : '#1e293b' }} strokeWidth={1.5} />
+          )}
         </button>
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-[1rem] bg-gradient-to-br from-[#00C2B8] to-[#009688] flex items-center justify-center shadow-lg shadow-teal-500/20">
@@ -158,6 +162,12 @@ export default function DashboardLayout({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={onApiConfigClick}
+            className={cn('px-3 py-1.5 text-xs font-medium rounded-xl transition-all', isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-700')}
+          >
+            API 配置
+          </button>
           <button
             onClick={onThemeToggle}
             className={cn('p-2 rounded-xl transition-all', isDark ? 'hover:bg-slate-800' : 'hover:bg-slate-100')}
@@ -175,14 +185,14 @@ export default function DashboardLayout({
           borderColor
         )}>
           {/* Logo */}
-          <div className="p-8 border-b flex-shrink-0" style={{ borderColor: isDark ? '#334155' : '#334155' }}>
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-[1.25rem] bg-gradient-to-br from-[#00C2B8] to-[#009688] flex items-center justify-center shadow-lg shadow-teal-500/25">
-                <Sparkles className="w-6 h-6 text-white" strokeWidth={1.5} />
+          <div className="p-6 flex-shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/25">
+                <Sparkles className="w-5 h-5 text-white" strokeWidth={1.5} />
               </div>
               <div>
-                <h1 className="font-bold text-white text-lg">词元共振</h1>
-                <p className="text-slate-500 text-xs">新一代全矩阵 AI 创作引擎</p>
+                <h1 className="font-bold text-white text-base">词元共振</h1>
+                <p className="text-slate-500 text-xs">TOKEN SYNC</p>
               </div>
             </div>
           </div>
@@ -196,38 +206,21 @@ export default function DashboardLayout({
                   key={item.id}
                   onClick={() => onMenuSelect?.(item.id)}
                   className={cn(
-                    'w-full flex items-center gap-4 px-5 py-4 rounded-xl transition-all duration-300 relative group',
+                    'w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300',
                     isActive 
-                      ? 'text-white'
-                      : 'text-slate-500 hover:text-slate-300'
+                      ? 'bg-indigo-500/20 text-white'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
                   )}
                 >
-                  {/* Active background with cutout effect */}
-                  {isActive && (
-                    <>
-                      <div className="absolute inset-0 bg-white/5 rounded-xl" />
-                      {/* Right side cutout to blend with main content */}
-                      <div className="absolute -right-0 top-0 w-6 h-6" style={{ background: bgColor }} />
-                      <div className="absolute -right-0 bottom-0 w-6 h-6" style={{ background: bgColor }} />
-                      <div className="absolute -right-6 top-1/2 -translate-y-1/2 w-6 h-full" style={{ background: bgColor }} />
-                      
-                      {/* Left highlight */}
-                      <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-10 bg-gradient-to-b from-teal-400 to-teal-600 rounded-r-full" />
-                    </>
-                  )}
-                  
                   <div className={cn(
-                    'relative z-10 w-11 h-11 rounded-xl flex items-center justify-center transition-all duration-300',
+                    'w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300',
                     isActive 
-                      ? 'bg-gradient-to-br from-teal-500/20 to-teal-600/20 text-teal-400'
-                      : 'hover:bg-white/5'
+                      ? 'bg-indigo-600/30 text-white'
+                      : 'text-slate-400 hover:text-white'
                   )}>
                     {item.icon}
                   </div>
-                  <span className={cn(
-                    'font-medium relative z-10 text-sm',
-                    isActive ? 'text-white' : 'text-slate-400'
-                  )}>
+                  <span className="font-medium text-sm">
                     {item.name}
                   </span>
                 </button>
@@ -237,25 +230,21 @@ export default function DashboardLayout({
 
           {/* Bottom Card */}
           <div className="p-6 flex-shrink-0">
-            <div className="bg-gradient-to-br from-indigo-600 to-purple-600 rounded-[1.5rem] p-6 text-white relative overflow-hidden">
-              {/* Decorative elements */}
-              <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
-              <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2" />
-              
-              <div className="relative z-10">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
-                    <Plus className="w-6 h-6" strokeWidth={1.5} />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-sm">加入交流群</p>
-                    <p className="text-indigo-200 text-xs">获取最新玩法和资源</p>
-                  </div>
+            <div className="bg-gradient-to-br from-indigo-600 to-purple-600 rounded-2xl p-6 text-white">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11.35 3.836c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V14.25M12 8.25h.008v.008H12V8.25zm0 3h.008v.008H12v-3zm0 3h.008v.008H12v-3z" />
+                  </svg>
                 </div>
-                <button className="w-full py-3 bg-white/20 hover:bg-white/30 rounded-xl text-sm font-semibold transition-all duration-300 backdrop-blur-sm hover:scale-[1.02] active:scale-[0.98]">
-                  立即加入
-                </button>
+                <div>
+                  <p className="font-semibold text-sm">加入交流群</p>
+                  <p className="text-indigo-200 text-xs">获取最新商业玩法与独家 API 渠道资源</p>
+                </div>
               </div>
+              <button className="w-full py-3 bg-white/20 hover:bg-white/30 rounded-xl text-sm font-semibold transition-all duration-300">
+                立即加入
+              </button>
             </div>
           </div>
         </aside>
@@ -272,7 +261,7 @@ export default function DashboardLayout({
               sidebarBg
             )}>
               {/* Logo */}
-              <div className="p-6 border-b flex items-center justify-between flex-shrink-0" style={{ borderColor: isDark ? '#1e293b' : '#334155' }}>
+              <div className="p-6 flex items-center justify-between flex-shrink-0">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-[1.25rem] bg-gradient-to-br from-[#00C2B8] to-[#009688] flex items-center justify-center">
                     <Sparkles className="w-6 h-6 text-white" strokeWidth={1.5} />
@@ -343,10 +332,10 @@ export default function DashboardLayout({
         )}
 
         {/* Main Content Area - 10 columns width (since sidebar is 64px fixed) */}
-        <main className="flex-1 md:ml-64 relative z-10">
+        <main className="flex-1 w-full md:ml-64 relative z-10 pt-16 md:pt-0">
           <div className="max-w-[1600px] mx-auto px-4 md:px-8 lg:px-10 py-6 md:py-8">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-8">
+            {/* Header - Desktop only shows page title */}
+            <div className="hidden md:flex items-center justify-between mb-8">
               <div>
                 <h2 className={cn('text-2xl font-bold mb-1', textColor)}>
                   {activeMenu === 'dashboard' && '工作台'}
@@ -414,7 +403,7 @@ export default function DashboardLayout({
                           {tools.length} 个工具
                         </span>
                       </div>
-                      <div className="flex gap-4 overflow-x-auto pb-3 -mx-4 px-4 md:mx-0 md:px-0 snap-x">
+                      <div className="flex gap-4 overflow-x-auto pb-3 -mx-2 px-2 md:mx-0 md:px-0 snap-x scrollbar-hide">
                         {tools.map((tool) => (
                           <div
                             key={tool.id}
