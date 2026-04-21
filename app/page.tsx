@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useTheme } from 'next-themes';
 import WritingAgentUI from './components/writing-agent/WritingAgentUI';
 import ApiConfig from './components/ApiConfig';
+import { useEditorStore } from './store/editorStore';
 import { 
   BookOpen, 
   Settings, 
@@ -25,6 +26,7 @@ export default function Page() {
   const { theme, setTheme } = useTheme();
   const [showApiConfig, setShowApiConfig] = useState(false);
   const [isBlinking, setIsBlinking] = useState(false);
+  const { apiConfig, setApiConfig } = useEditorStore();
 
   useEffect(() => {
     setMounted(true);
@@ -68,7 +70,14 @@ export default function Page() {
         <div className="w-full bg-white/90 dark:bg-[#26223A]/80 backdrop-blur-xl rounded-[24px] shadow-[0_8px_30px_rgb(20,184,166,0.05)] dark:shadow-[0_8px_30px_rgb(139,92,246,0.1)] border border-teal-100/50 dark:border-violet-400/15 p-8 max-w-4xl mx-auto transition-colors duration-300">
           <ApiConfig
             theme={theme === 'dark' ? 'dark' : 'blue'}
-            onSave={() => setShowApiConfig(false)}
+            onSave={(config) => {
+              setApiConfig({
+                apiBaseUrl: config.baseUrl,
+                apiKey: config.apiKey,
+                model: config.modelId
+              });
+              setShowApiConfig(false);
+            }}
             onClose={() => setShowApiConfig(false)}
             onTest={async () => true}
           />

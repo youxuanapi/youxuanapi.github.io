@@ -60,6 +60,8 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamContent, setStreamContent] = useState("");
   const [streamError, setStreamError] = useState("");
+  const [hasStartedTask, setHasStartedTask] = useState(false);
+  const [currentStage, setCurrentStage] = useState<string>("");
 
   const progressRef = useRef(0);
   const logsRef = useRef<string[]>([]);
@@ -134,7 +136,9 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
     // 1. 初始化所有状态
     setIsStreaming(true);
     setStreamError("");
-    setStreamContent(""); 
+    setStreamContent("");
+    setHasStartedTask(true);
+    setCurrentStage("准备阶段");
     
     // 检查API配置
     if (!apiConfig?.apiKey || !apiConfig?.apiBaseUrl || !apiConfig?.model) {
@@ -155,6 +159,8 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
       setIsStreaming(false);
       return;
     }
+    
+    setCurrentStage("发送请求");
     
     // 判定当前是卡片1还是卡片2，决定调用哪个API (请根据你实际的路由地址微调 url)
     const apiUrl = activeMode === 'create' 
@@ -180,6 +186,7 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
     };
 
     try {
+      setCurrentStage("连接API");
       const response = await fetch(apiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -190,11 +197,13 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
         throw new Error(`引擎响应异常: ${response.statusText}`);
       }
 
+      setCurrentStage("接收数据");
       // 2. 核心：原生流式解码（真正的打字机）
       const reader = response.body?.getReader();
       const decoder = new TextDecoder("utf-8");
       if (!reader) throw new Error("无法建立流式连接");
 
+      setCurrentStage("生成内容");
       let done = false;
       while (!done) {
         const { value, done: doneReading } = await reader.read();
@@ -205,8 +214,10 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
           setStreamContent((prev) => prev + chunk);
         }
       }
+      setCurrentStage("完成");
     } catch (err: any) {
       setStreamError(err.message || "网络异常或请求超时，请重试");
+      setCurrentStage("失败");
     } finally {
       setIsStreaming(false); // 彻底结束
     }
@@ -302,26 +313,22 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
           {/* ================= 卡片 1：从零创作爆文 ================= */}
           <div
             onClick={() => setActiveMode('create')}
-            className={`
-              relative flex flex-row items-start gap-4 p-4 rounded-2xl cursor-pointer
-              transition-all duration-300 ease-in-out
-              ${
-                activeMode === 'create'
-                  ? "bg-white bg-indigo-50/30 border-2 border-indigo-600 shadow-md -translate-y-1"
-                  : "bg-white border border-slate-200 hover:shadow-md hover:-translate-y-0.5"
-              }
-            `}
+            className={cn(
+              'relative flex flex-row items-start gap-4 p-4 rounded-2xl cursor-pointer',
+              'transition-all duration-300 ease-in-out',
+              activeMode === 'create'
+                ? 'bg-white bg-indigo-50/30 border-2 border-indigo-600 shadow-md -translate-y-1'
+                : 'bg-white border border-slate-200 hover:shadow-md hover:-translate-y-0.5'
+            )}
           >
             {/* 左侧图标底座 */}
             <div
-              className={`
-                w-12 h-12 shrink-0 rounded-xl flex items-center justify-center transition-colors duration-300
-                ${
-                  activeMode === 'create'
-                    ? "bg-indigo-50 border border-indigo-100 text-indigo-600"
-                    : "bg-slate-50 border border-slate-100 text-slate-500"
-                }
-              `}
+              className={cn(
+                'w-12 h-12 shrink-0 rounded-xl flex items-center justify-center transition-colors duration-300',
+                activeMode === 'create'
+                  ? 'bg-indigo-50 border border-indigo-100 text-indigo-600'
+                  : 'bg-slate-50 border border-slate-100 text-slate-500'
+              )}
             >
               <div className="relative flex">
                 <FileText size={22} />
@@ -347,26 +354,22 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
           {/* ================= 卡片 2：已有文章去除 AI 味 ================= */}
           <div
             onClick={() => setActiveMode('humanize')}
-            className={`
-              relative flex flex-row items-start gap-4 p-4 rounded-2xl cursor-pointer
-              transition-all duration-300 ease-in-out
-              ${
-                activeMode === 'humanize'
-                  ? "bg-white bg-blue-50/30 border-2 border-blue-600 shadow-md -translate-y-1"
-                  : "bg-white border border-slate-200 hover:shadow-md hover:-translate-y-0.5"
-              }
-            `}
+            className={cn(
+              'relative flex flex-row items-start gap-4 p-4 rounded-2xl cursor-pointer',
+              'transition-all duration-300 ease-in-out',
+              activeMode === 'humanize'
+                ? 'bg-white bg-blue-50/30 border-2 border-blue-600 shadow-md -translate-y-1'
+                : 'bg-white border border-slate-200 hover:shadow-md hover:-translate-y-0.5'
+            )}
           >
             {/* 左侧图标底座 */}
             <div
-              className={`
-                w-12 h-12 shrink-0 rounded-xl flex items-center justify-center transition-colors duration-300
-                ${
-                  activeMode === 'humanize'
-                    ? "bg-blue-50 border border-blue-100 text-blue-600"
-                    : "bg-slate-50 border border-slate-100 text-slate-500"
-                }
-              `}
+              className={cn(
+                'w-12 h-12 shrink-0 rounded-xl flex items-center justify-center transition-colors duration-300',
+                activeMode === 'humanize'
+                  ? 'bg-blue-50 border border-blue-100 text-blue-600'
+                  : 'bg-slate-50 border border-slate-100 text-slate-500'
+              )}
             >
               <div className="relative flex">
                 <PenLine size={22} />
@@ -540,13 +543,26 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
           )}
 
           {/* 重构后的去AI化引擎卡片 */}
-          <div className={`rounded-xl p-5 border transition-all duration-300 ${isAntiAiMode ? 'border-violet-500/50 bg-violet-500/10 shadow-lg shadow-violet-500/20' : 'border-violet-500/30 bg-violet-500/5'}`}>
+          <div className={cn(
+            'rounded-xl p-5 border transition-all duration-300',
+            isAntiAiMode
+              ? 'border-violet-500/50 bg-violet-500/10 shadow-lg shadow-violet-500/20'
+              : 'border-violet-500/30 bg-violet-500/5'
+          )}>
             <div className="flex items-start gap-4">
               <div className="flex items-center gap-3 flex-1">
-                <div className={`w-12 h-6 rounded-full transition-all duration-300 cursor-pointer relative ${isAntiAiMode ? 'bg-gradient-to-r from-indigo-500 to-violet-500' : 'bg-slate-300 dark:bg-slate-600'}`}
+                <div className={cn(
+                  'w-12 h-6 rounded-full transition-all duration-300 cursor-pointer relative',
+                  isAntiAiMode
+                    ? 'bg-gradient-to-r from-indigo-500 to-violet-500'
+                    : 'bg-slate-300 dark:bg-slate-600'
+                )}
                   onClick={() => !isRunning && setIsAntiAiMode(!isAntiAiMode)}
                 >
-                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300 shadow ${isAntiAiMode ? 'left-7' : 'left-1'}`} />
+                  <div className={cn(
+                    'absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300 shadow',
+                    isAntiAiMode ? 'left-7' : 'left-1'
+                  )} />
                 </div>
                 <div className="flex-1">
                   <h3 className="text-lg font-bold text-indigo-700 dark:text-violet-200 flex items-center gap-2 transition-colors">
@@ -626,7 +642,7 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
                 className="flex-1 py-3.5 bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white rounded-xl font-bold text-base shadow-lg shadow-indigo-400/30 dark:shadow-violet-400/30 hover:shadow-[0_0_20px_rgba(99,102,241,0.3)] dark:hover:shadow-[0_0_20px_rgba(139,92,246,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-500 relative overflow-hidden group"
               >
                 <span className="relative z-10">
-                  {activeMode === 'create' ? '🚀 启动爆文引擎' : '🛡️ 开始拟人重塑'}
+                  {activeMode === 'create' ? '启动爆文引擎' : '开始拟人重塑'}
                 </span>
                 <div className="absolute bottom-0 left-0 h-1 bg-white/50 w-0 group-hover:w-full transition-all duration-1000 ease-out"></div>
               </button>
@@ -645,7 +661,7 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
                 </button>
                 <button
                   onClick={reset}
-                  className="px-6 py-3.5 bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 rounded-xl font-bold hover:bg-indigo-200 dark:hover:bg-indigo-500/30 transition-all"
+                  className="px-6 py-3.5 bg-indigo-100 text-indigo-700 rounded-xl font-bold hover:bg-indigo-200 transition-all dark:bg-indigo-500/20 dark:text-indigo-300 dark:hover:bg-indigo-500/30"
                 >
                   重新生成
                 </button>
@@ -655,7 +671,7 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
             {isRunning && (
               <button
                 onClick={cancelTask}
-                className="w-full py-3.5 bg-slate-500 dark:bg-[#1A1528] text-white dark:text-indigo-300 rounded-xl font-bold shadow-lg hover:bg-slate-600 dark:hover:bg-indigo-500/50 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 relative overflow-hidden"
+                className="w-full py-3.5 bg-slate-500 text-white rounded-xl font-bold shadow-lg hover:bg-slate-600 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 relative overflow-hidden dark:bg-[#1A1528] dark:text-indigo-300 dark:hover:bg-indigo-500/50"
               >
                 <span className="relative z-10 flex items-center justify-center gap-2">
                   <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
@@ -663,7 +679,7 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
                   中止任务
-                  <span className="text-xs bg-white/20 dark:bg-indigo-500/20 px-2 py-0.5 rounded-full">
+                  <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full dark:bg-indigo-500/20">
                     {smoothProgress}%
                   </span>
                 </span>
@@ -684,76 +700,87 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
       </div>
 
       {/* 终端结果展示区 */}
-      <div className="mt-4 md:mt-8 bg-white rounded-2xl border border-slate-200 min-h-[250px] shadow-sm overflow-hidden">
-        {/* 顶部操作栏 */}
-        {(streamContent || (!isStreaming && !streamError)) && streamContent && (
-          <div className="flex items-center justify-between px-4 md:px-6 py-3 border-b border-slate-100 bg-slate-50/50">
-            <div className="flex items-center gap-2 text-sm text-slate-600">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-              </svg>
-              <span className="font-medium">字数统计：</span>
-              <span className="font-bold text-indigo-600">{streamContent.length}</span>
-            </div>
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(streamContent);
-                setCopied(true);
-                setTimeout(() => setCopied(false), 2000);
-              }}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-all bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200"
-            >
-              {copied ? (
-                <>
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  已复制
-                </>
-              ) : (
-                <>
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                  </svg>
-                  复制全文
-                </>
-              )}
-            </button>
-          </div>
-        )}
-
-        <div className="p-4 md:p-6">
-          {/* 状态 1：报错拦截 */}
-          {streamError && (
-            <div className="p-4 bg-red-50 border border-red-100 rounded-xl mb-4 text-red-600">
-              <p className="font-bold flex items-center gap-2">❌ 引擎启动失败</p>
-              <p className="text-sm mt-1">{streamError}</p>
-            </div>
-          )}
-
-          {/* 状态 2：骨架屏预热 (发起请求但还没收到第一个字) */}
-          {isStreaming && !streamContent && !streamError && (
-            <div className="flex flex-col items-center justify-center h-full min-h-[150px] text-slate-400 space-y-4 py-8">
-              <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
-              <p className="animate-pulse font-medium text-slate-500 tracking-wide">
-                引擎轰鸣中，正在深度构思文章骨架...
-              </p>
-            </div>
-          )}
-
-          {/* 状态 3：流式打字输出 */}
-          {(streamContent || (!isStreaming && !streamError)) && (
-            <div className="prose prose-slate max-w-none">
-              {/* 使用 pre-wrap 保证换行符被正确渲染 */}
-              <div className="whitespace-pre-wrap text-slate-700 leading-relaxed text-[15px]">
-                {streamContent || "等待输入灵感，启动引擎..."}
+      {hasStartedTask && (
+        <div className="mt-4 md:mt-8 bg-white rounded-2xl border border-slate-200 min-h-[250px] shadow-sm overflow-hidden">
+          {/* 顶部操作栏 */}
+          {(streamContent || (!isStreaming && !streamError)) && streamContent && (
+            <div className="flex items-center justify-between px-4 md:px-6 py-3 border-b border-slate-100 bg-slate-50/50">
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                </svg>
+                <span className="font-medium">字数统计：</span>
+                <span className="font-bold text-indigo-600">{streamContent.length}</span>
               </div>
-              {/* 打字时的光标闪烁效果 */}
-              {isStreaming && <span className="inline-block w-1.5 h-4 ml-1 bg-indigo-500 animate-pulse"></span>}
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(streamContent);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-all bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200"
+              >
+                {copied ? (
+                  <>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    已复制
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                    </svg>
+                    复制全文
+                  </>
+                )}
+              </button>
             </div>
           )}
+
+          <div className="p-4 md:p-6">
+            {/* 状态 1：报错拦截 */}
+            {streamError && (
+              <div className="p-4 bg-red-50 border border-red-100 rounded-xl mb-4 text-red-600">
+                <p className="font-bold flex items-center gap-2">❌ 引擎启动失败</p>
+                <p className="text-sm mt-1">{streamError}</p>
+              </div>
+            )}
+
+            {/* 状态 2：骨架屏预热 (发起请求但还没收到第一个字) */}
+            {isStreaming && !streamContent && !streamError && (
+              <div className="flex flex-col items-center justify-center h-full min-h-[150px] text-slate-400 space-y-4 py-8">
+                <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+                <p className="animate-pulse font-medium text-slate-500 tracking-wide">
+                  引擎轰鸣中，正在{currentStage}...
+                </p>
+                <p className="text-sm text-slate-400">
+                  当前阶段：{currentStage}
+                </p>
+              </div>
+            )}
+
+            {/* 状态 3：流式打字输出 */}
+            {(streamContent || (!isStreaming && !streamError)) && (
+              <div className="prose prose-slate max-w-none">
+                {/* 阶段显示 */}
+                {currentStage && (
+                  <div className="mb-4 p-2 bg-indigo-50 rounded-lg text-sm text-indigo-600">
+                    <span className="font-medium">当前阶段：</span>{currentStage}
+                  </div>
+                )}
+                {/* 使用 pre-wrap 保证换行符被正确渲染 */}
+                <div className="whitespace-pre-wrap text-slate-700 leading-relaxed text-[15px]">
+                  {streamContent || "等待输入灵感，启动引擎..."}
+                </div>
+                {/* 打字时的光标闪烁效果 */}
+                {isStreaming && <span className="inline-block w-1.5 h-4 ml-1 bg-indigo-500 animate-pulse"></span>}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 底部合规声明 */}
       <div className="text-center text-xs text-slate-700/40 dark:text-indigo-500/40 pt-2 pb-6 px-4 transition-colors duration-300">
