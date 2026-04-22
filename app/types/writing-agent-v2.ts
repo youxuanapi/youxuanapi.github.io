@@ -153,6 +153,7 @@ export interface WritingPersonaV2 {
   createdAt: string;
   updatedAt: string;
   lastUsedAt?: string;
+  useCount: number;
 }
 
 // ==================== 模块2：深度调研类型 ====================

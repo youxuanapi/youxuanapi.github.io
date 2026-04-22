@@ -25,6 +25,7 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
     updateParagraph,
     setPersona,
     addPersona,
+    updatePersona,
     deletePersona,
     setRunning,
     setProgress,
@@ -170,6 +171,12 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
     // 获取选中的persona对象
     const selectedPersona = personas.find(p => p.id === selectedPersonaId);
     
+    // 如果选中了人格，增加使用次数
+    if (selectedPersonaId && selectedPersona) {
+      const currentUseCount = (selectedPersona as any).useCount || 0;
+      updatePersona(selectedPersonaId, { useCount: currentUseCount + 1 });
+    }
+    
     // 组装你要发给后端的数据 (这里请保留你原本需要发送的 payload 参数)
     const requestPayload = activeMode === 'create' ? {
       topic: topic,
@@ -177,7 +184,8 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
       persona: selectedPersona,
       apiBaseUrl: apiConfig.apiBaseUrl,
       apiKey: apiConfig.apiKey,
-      model: apiConfig.model
+      model: apiConfig.model,
+      targetWordCount: wordCount
     } : {
       content: sourceArticle,
       apiBaseUrl: apiConfig.apiBaseUrl,
@@ -198,23 +206,59 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
       }
 
       setCurrentStage("接收数据");
-      // 2. 核心：原生流式解码（真正的打字机）
+      // 2. 核心：解析 SSE JSON 格式
       const reader = response.body?.getReader();
       const decoder = new TextDecoder("utf-8");
       if (!reader) throw new Error("无法建立流式连接");
 
-      setCurrentStage("生成内容");
+      let buffer = "";
       let done = false;
+      
       while (!done) {
         const { value, done: doneReading } = await reader.read();
         done = doneReading;
+        
         if (value) {
-          const chunk = decoder.decode(value, { stream: true });
-          // 实时将拿到的字追加到屏幕上
-          setStreamContent((prev) => prev + chunk);
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            
+            if (trimmed.startsWith('data: ')) {
+              try {
+                const jsonStr = trimmed.slice(6);
+                const data = JSON.parse(jsonStr);
+                
+                // 更新当前阶段显示
+                if (data.message) {
+                  setCurrentStage(data.message);
+                }
+                
+                // 更新内容（如果有的话）
+                if (data.content) {
+                  setStreamContent(data.content);
+                }
+                
+                // 检查是否完成
+                if (data.status === 'done') {
+                  setCurrentStage("完成");
+                }
+                
+                // 检查错误
+                if (data.status === 'error') {
+                  setStreamError(data.message || "生成过程出错");
+                  setCurrentStage("失败");
+                }
+              } catch (e) {
+                console.error('解析 SSE 数据失败:', e);
+              }
+            }
+          }
         }
       }
-      setCurrentStage("完成");
     } catch (err: any) {
       setStreamError(err.message || "网络异常或请求超时，请重试");
       setCurrentStage("失败");
@@ -523,20 +567,71 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
                   </button>
                 </div>
               ) : (
-                <div className="relative">
-                  <select
-                    value={selectedPersonaId || ''}
-                    onChange={(e) => setSelectedPersonaId(e.target.value || null)}
-                    className="w-full px-4 py-3 bg-indigo-50/30 dark:bg-[#0F0A1E] border border-indigo-100 dark:border-indigo-500/20 rounded-xl focus:ring-2 focus:ring-indigo-400 dark:focus:ring-indigo-500 text-slate-900 dark:text-indigo-100 text-sm transition-colors"
-                    disabled={isRunning}
+                <div className="space-y-3">
+                  {/* 默认选项 */}
+                  <div
+                    className={cn(
+                      'p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 hover:bg-indigo-50/50',
+                      !selectedPersonaId ? 'border-indigo-500 bg-indigo-50/50' : 'border-slate-200 dark:border-indigo-500/20 bg-white'
+                    )}
+                    onClick={() => setSelectedPersonaId(null)}
                   >
-                    <option value="">默认通用大模型音色</option>
-                    {personas.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} - {p.description ? p.description.slice(0, 30) + '...' : ''}
-                      </option>
-                    ))}
-                  </select>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center">
+                          <span className="text-indigo-600 dark:text-indigo-300">🎯</span>
+                        </div>
+                        <div>
+                          <p className="font-semibold text-slate-800 dark:text-indigo-100">默认通用大模型音色</p>
+                          <p className="text-xs text-slate-500 dark:text-indigo-300/70 mt-0.5">适用于各种写作场景</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* 人格列表 */}
+                  {personas.map((p) => (
+                    <div
+                      key={p.id}
+                      className={cn(
+                        'p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 hover:bg-indigo-50/50',
+                        selectedPersonaId === p.id ? 'border-indigo-500 bg-indigo-50/50' : 'border-slate-200 dark:border-indigo-500/20 bg-white'
+                      )}
+                      onClick={() => setSelectedPersonaId(p.id)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-100 to-violet-100 dark:from-indigo-500/20 dark:to-violet-500/20 flex items-center justify-center">
+                            <span className="text-indigo-600 dark:text-indigo-300">👤</span>
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="font-semibold text-slate-800 dark:text-indigo-100">{p.name}</p>
+                              <span className="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 text-xs rounded-full">
+                                {(p as any).useCount || 0} 次使用
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-500 dark:text-indigo-300/70 mt-0.5">{p.description || '专属写作人格'}</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deletePersona(p.id);
+                            if (selectedPersonaId === p.id) {
+                              setSelectedPersonaId(null);
+                            }
+                          }}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/20 transition-colors"
+                          disabled={isRunning}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

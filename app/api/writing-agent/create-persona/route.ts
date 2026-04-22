@@ -209,19 +209,39 @@ function buildPersonaFromAnalysis(
 ): WritingPersonaV2 {
   const now = new Date();
   const nowISO = now.toISOString();
-  const timestamp = now.toLocaleString('zh-CN', { 
+  
+  // 生成符合要求的时间格式
+  const dateStr = now.toLocaleDateString('zh-CN', { 
     month: '2-digit', 
-    day: '2-digit', 
+    day: '2-digit' 
+  }).replace(/\//g, '');
+  
+  const timeStr = now.toLocaleTimeString('zh-CN', { 
     hour: '2-digit', 
     minute: '2-digit' 
-  });
+  }).replace(/:/g, '');
+  
+  // 生成特点关键词（从分析中提取或使用默认）
+  const trackKeywords: Record<string, string> = {
+    '情感文': '情感家',
+    '干货文': '干货王',
+    '故事文': '故事手',
+    '观点文': '思想者',
+  };
+  
+  const featureKeyword = (analysis.featureKeyword as string) || trackKeywords[trackType] || '写作匠';
+  const shortKeyword = featureKeyword.slice(0, 5); // 确保不超过5字
+  
+  // 组合命名规则：特点关键词-创建时间-使用次数
+  const personaName = `${shortKeyword}-${dateStr}${timeStr}`;
   
   return {
     id: generateId(),
     userId,
-    name: (analysis.name as string) || `专属写作人格 (${timestamp})`,
+    name: personaName,
     description: (analysis.description as string) || '基于样本分析生成',
     trackType,
+    useCount: 0,
     
     quantitativeFeatures: {
       avgSentenceLength: (analysis.quantitativeFeatures as any)?.avgSentenceLength || 20,
@@ -346,10 +366,22 @@ function buildPersonaFromAnalysis(
 }
 
 function getDefaultPersonaAnalysis(): Record<string, unknown> {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('zh-CN', { 
+    month: '2-digit', 
+    day: '2-digit' 
+  }).replace(/\//g, '');
+  
+  const timeStr = now.toLocaleTimeString('zh-CN', { 
+    hour: '2-digit', 
+    minute: '2-digit' 
+  }).replace(/:/g, '');
+  
   return {
-    name: '默认人格',
+    name: `写作匠-${dateStr}${timeStr}`,
     description: '基于样本分析生成',
     trackType: '情感文',
+    useCount: 0,
     quantitativeFeatures: {
       avgSentenceLength: 12,
       sentenceLengthMin: 5,

@@ -3,125 +3,141 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { topic, requirements, painPoint, detail, sublimation, wordCount, persona, apiBaseUrl, apiKey, model } = body;
+    // 模块 1：参数提取与动态切片计算（解决字数失控）
+    // 必须提取 targetWordCount，默认 1000
+    const { topic, requirements, persona, apiBaseUrl, apiKey, model, targetWordCount = 1000 } = body;
 
     if (!topic) return NextResponse.json({ error: '请输入写作主题' }, { status: 400 });
     if (!apiBaseUrl || !apiKey || !model) return NextResponse.json({ error: '请先配置API' }, { status: 400 });
 
-    // 1. 动态构建人格特征
-    const personaDesc = persona ? `
-【专属写作人格注入】
-- 风格名称：${persona.name}
-- 核心特征：情感密度(${persona.dynamicPreferences?.emotionDensity || 0.5}/100), 直接程度(${persona.dynamicPreferences?.directness || 0.5}/100)
-- 叙事视角：${persona.dynamicPreferences?.perspective === 'first' ? '第一人称「我」' : '第三人称「她们/他」'}
-- 语言偏好：优先使用 [${persona.vocabulary?.preferred?.join('、') || '自然口语'}]，严格规避 [${persona.vocabulary?.avoided?.join('、') || '说教词汇'}]
-` : '使用通用拟人音色。';
+    // 动态计算需要的切片数量（每个切片约承担 250-300 字）
+    const sliceCount = Math.max(4, Math.ceil(targetWordCount / 250));
 
-    // ================= 动态基因库构建 =================
-    const ANCHORS = [
-      "【走心独白风】：有时候我在想，人这一辈子到底在图什么。看着手机里那个永远不会再亮起的头像，突然觉得，那些曾经以为过不去的坎，其实也就那么回事。说实话，挺可笑的。",
-      "【犀利吐槽风】：别再搞什么自我感动了，行不行？你以为你在牺牲，在别人眼里你就是个毫无底线的讨好型人格。每次看到那种为了别人委屈自己的人，我都想冲过去摇醒她。太憋屈了。",
-      "【克制叙事风】：那天的雨下得很大。她站在站牌底下，没有打伞，手里紧紧捏着一张揉皱的体检报告。她没有哭，甚至没有表情。但你能感觉到，她心里的某座大厦，正在无声无息地轰然倒塌。"
-    ];
+    // ============================================================
+    // 内部通用 fetchLLM 方法
+    // ============================================================
+    const fetchLLM = async (
+      model: string,
+      systemPrompt: string,
+      userPrompt: string,
+      options: { temperature: number; stream: boolean; frequency_penalty?: number }
+    ) => {
+      const response = await fetch(`${apiBaseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          temperature: options.temperature,
+          stream: options.stream,
+          frequency_penalty: options.frequency_penalty
+        }),
+      });
 
-    const RHYTHMS = [
-      "【节奏A：极端长短句】：用极其绵长、细节极多（超过50字）的复杂长句铺陈画面，然后突然用一个极短句（少于5字，如：‘很痛。’）单句成段，形成视觉断崖。",
-      "【节奏B：碎碎念递进】：大量使用半截话和自我推翻。写一段话后，下一段用‘其实也不全对’、‘或者说’来反驳自己，模仿人类思考时的纠结感。",
-      "【节奏C：对话式推进】：文章中要频繁穿插假想的对话或自言自语（可以带括号吐槽），就像坐在读者对面聊天一样，打破传统的论述结构。"
-    ];
+      if (!response.ok) throw new Error(`LLM 调用失败: ${response.status}`);
 
-    // 随机抽取本次生成的基因
-    const selectedAnchor = ANCHORS[Math.floor(Math.random() * ANCHORS.length)];
-    const selectedRhythm = RHYTHMS[Math.floor(Math.random() * RHYTHMS.length)];
+      const data = await response.json();
+      return data.choices?.[0]?.message?.content || '';
+    };
 
-    // ================= XML 结构化提示词 =================
-    const systemPrompt = `
-<Role>
-你是一位拥有顶级共情力、深谙人性的散文作家。你极其厌恶八股文和说教，擅长用充满毛边感和烟火气的语言直击人心。
-</Role>
+    // ============================================================
+    // Agent 1：蓝图规划师（动态注入切片数量）
+    // ============================================================
+    const blueprintPrompt = `
+你是顶级爆文架构师。根据用户主题，生成一个包含 ${sliceCount} 个切片的文章大纲。
+【生死红线】：
+1. 切片结构必须是纯粹的"现象洞察、心理剖析、共鸣升华"，绝对不准出现"举例说明"、"编造故事"的意图。
+2. 只输出合法的 JSON 数组：[{"id": 1, "intent": "现象白描，引出痛点"}, {"id": 2, "intent": "向内挖掘心理动机"}...]
+`;
 
-<Context>
-${personaDesc}
-</Context>
+    // ============================================================
+    // Agent 2：切片撰写者 (Writer Agent - 回归克制白描)
+    // ============================================================
+    const writerPrompt = `
+你是一位极其克制的非虚构作家。请根据大纲意图，只撰写当前这一个自然段。
+【生死红线】：
+1. 绝对不要加任何口头禅或过渡语（如：说实话、总之、另外）。你只负责讲事，直接切入画面。
+2. 绝对禁止换行（\\n），当前输出必须是一个完整的自然段。
+3. 把所有的情绪形容词，替换成客观的细节动作（例如：不要写"她很委屈"，写"她攥着发票边缘指节泛白"）。
+4. 严禁超过80字没有句号。
+`;
 
-<Mutation_Directives>
-本次创作，你必须【强制】采用以下随机抽取的语感和节奏，这将彻底改变你的行文骨架，确保每次生成的文章绝不重样：
-1. 语感锚定（请模仿这种腔调）：${selectedAnchor}
-2. 叙事节奏（请严格执行）：${selectedRhythm}
-</Mutation_Directives>
-
-<Execution_Rules>
-  1. 【绝对禁止对称节奏与一逗到底（生死红线）】：你必须打破排版的周期规律！绝对不要形成“长段落-极短段落-长段落-极短段落”的循环公式。段落长度必须是混沌、不规则的（例如：中-短-长-中-极短）。此外，长段落中必须正常使用句号（。）进行断句，绝对禁止写出超过80字没有句号的“一逗到底”病态长句！
-  2. 【反击预测模型】：不要匀速输出。你必须用具体的物品、微小的动作（如：檐角滴下来的冰碴子化在羽绒服领口）来替代“非常难过、极度焦虑”等干瘪的形容词。
-  3. 【口语化倒装与去格式化】：在情绪高潮处自然使用倒装句（如：“这日子没法过了，说真的。”）。带数字小标题下方必须直接讲故事或场景，禁止使用“定义+解释”的机器结构。
-</Execution_Rules>
-
-<Format>
-1. 全文规模控制在 ${wordCount || 1500} 字左右。
-2. 结尾绝不总结，用一句通透的感慨或无声的留白收尾。
-3. 直接输出纯文本正文，不输出任何 XML 标签。
-</Format>`;
-
-    // 3. 动态构建用户提示词（注入深度逻辑）
-    const userPrompt = `
-【写作主题】：${topic}
-【补充需求】：${requirements || '无'}
-${painPoint ? `【核心痛点】：${painPoint}` : ''}
-${detail ? `【细节要求】：${detail}` : ''}
-${sublimation ? `【结尾升华建议】：${sublimation}` : ''}
-
-请基于以上深度逻辑直接开始创作。`;
-
-    const response = await fetch(`${apiBaseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        temperature: 0.9,           // 进一步拉高，注入极强的人类随机性和发散性
-        top_p: 0.9,                 // 扩大词汇采样池，拒绝平庸词汇
-        frequency_penalty: 0.8,     // 强力惩罚重复词汇，打破AI的习惯性用语
-        presence_penalty: 0.5,      // 鼓励跳跃到新话题
-        stream: true,
-      }),
-    });
-
-    if (!response.ok) throw new Error(`生成请求失败: ${response.status}`);
+    // ============================================================
+    // Agent 3：机械味质检员 (QA Agent - 严禁强加口语)
+    // ============================================================
+    const qaPrompt = `
+你是冷酷的文字质检员。你接收到的是文章的"其中一个片段"。
+你的唯一任务是消除这段话里的"机器味（如：句式对仗工整、说教腔、四字成语泛滥）"。
+【修正纪律】：
+1. 绝对禁止在段首或段尾强加"说实在的"、"这日子没法过了"、"其实"等任何口语化连词或感叹词！
+2. 遇到对仗排比，必须强行打碎，改成错落有致的长短句。
+3. 遇到假大空的词，换成大白话。
+4. 如果这段话读起来已经像人写的客观叙述，直接原样返回，少废话，不准乱加料。
+`;
 
     const encoder = new TextEncoder();
-    const decoder = new TextDecoder();
+
     const stream = new ReadableStream({
       async start(controller) {
-        const reader = response.body?.getReader();
-        if (!reader) { controller.close(); return; }
-        let buffer = '';
         try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-            for (const line of lines) {
-              const trimmed = line.trim();
-              if (!trimmed || trimmed === 'data: [DONE]') continue;
-              if (trimmed.startsWith('data: ')) {
-                try {
-                  const data = JSON.parse(trimmed.slice(6));
-                  const delta = data.choices?.[0]?.delta?.content;
-                  if (delta) controller.enqueue(encoder.encode(delta));
-                } catch (e) {}
-              }
-            }
+          const sendEvent = (controller: any, status: string, message: string, content = '') => {
+            const payload = JSON.stringify({ status, message, content });
+            controller.enqueue(encoder.encode(`data: ${payload}\n\n`));
+          };
+
+          // 阶段 1：生成大纲
+          sendEvent(controller, 'blueprint', `正在为您解构爆款基因，生成 ${sliceCount} 幕动态结构蓝图...`);
+          const blueprintResponse = await fetchLLM(model, blueprintPrompt, topic, { temperature: 0.7, stream: false });
+          const slices = JSON.parse(blueprintResponse);
+          sendEvent(controller, 'blueprint_done', '结构蓝图构建完成！', JSON.stringify(slices));
+
+          // ============================================================
+          // 模块 3：引入上下文记忆链条的 for 循环（解决八股文割裂）
+          // ============================================================
+          let fullArticle = "";
+          let previousContext = "这是文章的开头，请直接破题。";
+
+          for (let i = 0; i < slices.length; i++) {
+            const slice = slices[i];
+
+            // 1. 撰写初稿（将 previousContext 喂给模型）
+            sendEvent(controller, 'writing', `正在撰写第 ${i + 1}/${sliceCount} 幕...`);
+            const writerUserPrompt = `【上文末尾内容】：${previousContext}\n\n【当前切片意图】：${slice.intent}`;
+            const draftText = await fetchLLM(model, writerPrompt, writerUserPrompt, { temperature: 0.8, stream: false });
+
+            // 2. 质检与修复
+            sendEvent(controller, 'checking', `正在对第 ${i + 1} 幕进行靶向扫描...`);
+            const fixedText = await fetchLLM(model, qaPrompt, `审查并去AI化此段：${draftText}`, { temperature: 0.9, frequency_penalty: 0.6, stream: false });
+
+            // 3. 组装与记忆更新（提取最后 150 个字符作为下一段的上下文）
+            fullArticle += fixedText + "\n\n";
+            const lastChars = fixedText.length > 150 ? fixedText.slice(-150) : fixedText;
+            previousContext = `上文结尾内容是："...${lastChars}"。请你接着这段话往下自然延伸，严禁另起炉灶或使用并列词语。`;
+
+            sendEvent(controller, 'chunk_done', `第 ${i + 1} 幕打磨完成`, fullArticle);
           }
-        } finally { controller.close(); reader.releaseLock(); }
-      }
+
+          // 阶段 5：终局输出
+          sendEvent(controller, 'done', '拟人重塑彻底完成！当前文章原创度极佳。', fullArticle);
+          controller.close();
+        } catch (error: any) {
+          console.error('流处理错误:', error);
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: 'error', message: error.message })}\n\n`));
+          controller.close();
+        }
+      },
     });
 
-    return new NextResponse(stream, { headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' } });
+    return new NextResponse(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive'
+      }
+    });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

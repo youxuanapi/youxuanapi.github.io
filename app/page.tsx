@@ -276,7 +276,7 @@ export default function Page() {
 
           <div className="flex items-center space-x-4">
             <button 
-              onClick={() => setShowApiConfig(true)}
+              onClick={() => setShowApiConfig(!showApiConfig)}
               className="flex items-center gap-2 px-4 py-2 bg-white/80 dark:bg-[#1A1528]/80 backdrop-blur-xl border border-indigo-100/50 dark:border-indigo-500/15 rounded-full text-sm font-medium text-slate-600 dark:text-indigo-300 hover:shadow-sm transition-all"
             >
               <Settings className="w-4 h-4" />

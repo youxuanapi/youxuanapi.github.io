@@ -1,0 +1,67 @@
+**Trae，请立即执行以下深度集成任务。我们要模仿顶级工具的架构逻辑，将前端的“人格系统”、“深度逻辑”与“动态字数控制”完整接入流式生成链路，彻底解决文章“没灵魂”和“字数锁死”的问题。**
+
+#### 第一步：打通前端数据流 (`app/components/writing-agent/WritingAgentUI.tsx`)
+请修改 `executeStreamTask` 函数（约 171 行左右），确保在调用 `generate-full-article` 时，将所有深度参数传给后端：
+```typescript
+// 在 executeStreamTask 内部更新 requestPayload
+const requestPayload = activeMode === 'create' ? {
+  topic: topic,
+  requirements,
+  [cite_start]// 核心：接回被遗忘的深度参数 [cite: 70, 73, 75]
+  painPoint, 
+  detail,
+  sublimation,
+  [cite_start]// 核心：接回动态字数控制 [cite: 108]
+  wordCount: wordCount, 
+  [cite_start]// 核心：接回人格系统 [cite: 36, 132]
+  persona: personas.find(p => p.id === selectedPersonaId),
+  apiBaseUrl: apiConfig.apiBaseUrl,
+  apiKey: apiConfig.apiKey,
+  model: apiConfig.model
+} : {
+  content: sourceArticle,
+  apiBaseUrl: apiConfig.apiBaseUrl,
+  apiKey: apiConfig.apiKey,
+  model: apiConfig.model
+};
+```
+
+#### 第二步：重构后端生成引擎 (`app/api/writing-agent/generate-full-article/route.ts`)
+**请重写此文件的 Prompt 组装逻辑，模拟 Claude 的高质感文风：**
+
+```typescript
+[cite_start]// 1. 提取并转化人格特征 [cite: 37, 262]
+const personaRules = persona ? `
+【写作人格锁定】
+- 视角：必须以${persona.dynamicPreferences?.perspective === 'first' ? '第一人称「我」' : '第三人称「她们」'}进行深度叙事。
+- 情感：情感密度要求 ${persona.dynamicPreferences?.emotionDensity || 50}/100，侧重${persona.dynamicPreferences?.rhythm === 'fast' ? '快节奏爆发' : '慢节奏铺垫'}。
+- 词汇：优先使用 [${persona.vocabulary?.preferred?.join('、') || '生活化词汇'}]。
+` : '';
+
+[cite_start]// 2. 注入深度逻辑 [cite: 183]
+const depthContext = `
+【深度叙事素材】
+- 核心痛点：${painPoint || '由你挖掘该主题下的深层焦虑'}
+- 关键细节：${detail || '由你补充1-2个极具画面感的微观动作'}
+- 升华金句：${sublimation || '由你根据全文逻辑自然引出'}
+`;
+
+const systemPrompt = `你是一位具备顶级共情力的作家。请根据以下维度直接创作正文：
+\${personaRules}
+\${depthContext}
+
+【🚨 Claude式高阶准则】
+1. 目标字数：全文正文必须控制在 \${wordCount || 1500} 字左右，严禁大幅缩水。
+2. 拒绝八股：严禁使用"1.2.3."序号，严禁"首先、其次、总之"。采用自然的心流叙事。
+3. 真实呼吸感：大量使用单句成段。允许使用“其实、但是、说实话、然后”等人类转折连词。
+4. 反AI检测：在结尾处自然使用一句口语化的倒装感叹（如：“这笔钱花得我真憋屈，说实话。”）。
+
+请直接输出排版舒适的纯文本正文，不带小标题。`;
+```
+
+#### 第三步：布局与进度条对齐
+- 确保在手机端，侧边栏保持隐藏，卡片垂直排列，防止文字竖排。
+- [cite_start]确保字数 slider [cite: 108] 变更后，用户再次点击生成能立即应用新的字数。
+
+---
+
