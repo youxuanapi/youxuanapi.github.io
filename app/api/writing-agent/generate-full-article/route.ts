@@ -3,20 +3,11 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    // 模块 1：参数提取与动态切片计算（解决字数失控）
-    // 必须提取 targetWordCount，默认 1100
+    // 1. 提取参数与初始化
     const { topic, requirements, persona, apiBaseUrl, apiKey, model, targetWordCount = 1100 } = body;
 
     if (!topic) return NextResponse.json({ error: '请输入写作主题' }, { status: 400 });
     if (!apiBaseUrl || !apiKey || !model) return NextResponse.json({ error: '请先配置API' }, { status: 400 });
-
-    // 1. 动态切片：按每段大约 200-250 字计算，至少分 4 段保证结构完整
-    const sliceCount = Math.max(4, Math.ceil(targetWordCount / 230));
-    // 2. 计算基准字数
-    const baseWords = Math.ceil(targetWordCount / sliceCount);
-    // 3. 设定上下限，给予模型一定弹性
-    const minWords = Math.max(100, baseWords - 20);
-    const maxWords = baseWords + 60;
 
     // ============================================================
     // 内部通用 fetchLLM 方法
@@ -49,37 +40,36 @@ export async function POST(request: NextRequest) {
     };
 
     // ============================================================
-    // Agent 1：蓝图规划师（拔高立意）
+    // 2. 定义双 Agent 的终极纯净版 Prompt
     // ============================================================
-    const blueprintPrompt = `
-你是 SaaS 文本引擎的架构中枢。请根据主题，生成包含 ${sliceCount} 个环节的文章大纲。
-【SaaS 泛用纪律】：
-1. 无论什么主题，必须遵循"现象陈述 -> 逻辑深挖 -> 利益/代价拆解 -> 高维认知"的泛用结构。
-2. 意图（intent）必须是纯理论、纯逻辑维度的剖析要求。
-3. 绝对禁止要求写手编造具体的"场景、故事、案例"或"你我他"的互动。
-输出 JSON 数组示例：[{"id":1, "role":"intro", "intent":"引出该主题下最普遍的社会现象，打破大众固有认知"}]
-`;
 
-    // ============================================================
-    // Agent 2：切片撰写者 (Writer Agent - 动态注入字数红线)
-    // ============================================================
+    // Agent 1：全篇撰写者 (彻底去模板化，自然流露，拒绝元词汇污染)
     const writerPrompt = `
-你是极其理智的社会学专栏作家。
-【红线纪律】：
-1. 视角锁定：强制使用第三人称（大众、人们、很多时候）。严禁使用第二人称"你"进行爹味说教！
-2. 严禁故事：不准编造具体的金额、菜名、人名或狗血剧情。只能进行"现象白描"和"心理推演"。
-3. 禁止机械词：严禁使用"首先、其次、总之、第一种"。
+你是深谙人性、洞察世事的人际关系与社会专栏主笔。
+【核心任务】：撰写一篇剖析人情世故的深度清单体爆文，全文总字数逼近 ${targetWordCount} 字。
+
+【灵魂与排版纪律（违者重罚）】：
+1. 清单结构与开门见山：使用独立小标题进行分类。在小标题下的正文起手句，【绝对禁止】使用"第一种就是"、"第二种是"等废话！直接开门见山，抛出观点或现象白描！
+2. 拒绝内部公式化：【绝对禁止】每个小节的论述逻辑雷同（严禁每段都按"引语+现象+本质"写）。
+3. 严控引语频次："俗话说、老话讲"等引用，【全文最多只能出现一到两次】！
+4. 深度剖析与视角：像手术刀一样剖析背后的算计与情绪消耗。自然代入"我们"的共情视角，但【严禁】在段落开头高频重复使用"我们"。不要写流水账故事。
+
+【反诱导与语感法则】：
+5. 自然语感（绝不堆砌）：用最自然、随机的人类大白话交流。【绝对禁止】刻意在文中堆砌或反复套用任何特定的口语词汇（如"说白了"、"本质上"、"你以为"等）。一切顺其自然！
+6. 元词汇屏蔽：你的行文风格是"人间清醒、犀利、诛心"，但你【绝对禁止】将这些词汇直接写进正文里去夸赞自己或教育读者！
+7. 抹除机械感：全面扫除"首先、其次、不可否认、毋庸置疑、综上所述、总而言之"。
+8. 增强顿挫：多用"倒装句"或"省略主语的短句（无主句）"，打破AI句式的匀称感。
 `;
 
-    // ============================================================
-    // Agent 3：质检员 (QA Agent - 保护字数)
-    // ============================================================
+    // Agent 2：全局质检员 (宏观防模板大师，专杀对称性、多余口头禅与结尾废话)
     const qaPrompt = `
-你是最终审稿人。
-【质检与保护指令】：
-1. 抹除爹味：看到"你有没有想过"、"我告诉你"等说教句式，立刻改成客观陈述。
-2. 抹除八股文：打碎段首高度重复的词汇（如连续用"很多人"开头）。
-3. 字数保护红线：在修改时，采用"同义替换"或改为倒装句或"微调"，绝对不允许大段删减文字，以免导致整篇文章字数严重萎缩！
+你是顶级自媒体爆款内容主编。你收到的是一篇初稿，请进行宏观防模板质检与微观精修。
+【精修与全局反模版指令】：
+1. 猎杀废话开头：如果发现某个小标题下的正文是以"第一/二种就是"或"有一种人"开头的，立刻删掉，让段落直接进入正题！
+2. 全文模板化雷达：观察全文阵型！如果发现连续几个小节的内部行文结构完全一样，必须立刻局部重写打散！打破浓烈的机器排比味。
+3. 猎杀多余引语与刻意口语：初稿中"俗话说/老话讲"超过两次则强制删改。如果发现初稿刻意滥用了相同的口语词（如到处都是"说白了"或频繁使用"我们"开头），立刻打散替换，保证用词的随机性与自然感。
+4. 靶向去痕与极致省字：无情扫除所有"综上所述、总而言之、最后我想说"等结尾废话和AI过渡词。将累赘的代词（他、你）提炼为紧凑的无主句。
+5. 【字数保护铁律】：修改只能是句式的重构和打散，绝对不允许大段删减文字导致篇幅严重萎缩！总字数必须与初稿完全相当！
 `;
 
     const encoder = new TextEncoder();
@@ -88,55 +78,28 @@ export async function POST(request: NextRequest) {
       async start(controller) {
         try {
           const sendEvent = (controller: any, status: string, message: string, content = '') => {
-            const payload = JSON.stringify({ status, message, content });
+            const payload = JSON.stringify({ status: status, message: message, content: content });
             controller.enqueue(encoder.encode(`data: ${payload}\n\n`));
           };
 
-          // 阶段 1：生成大纲
-          sendEvent(controller, 'blueprint', `正在为您解构爆款基因，生成 ${sliceCount} 幕动态结构蓝图...`);
-          const blueprintResponse = await fetchLLM(model, blueprintPrompt, topic, { temperature: 0.7, stream: false });
-          const slices = JSON.parse(blueprintResponse);
-          sendEvent(controller, 'blueprint_done', '结构蓝图构建完成！', JSON.stringify(slices));
-
           // ============================================================
-          // 模块 3：引入上下文记忆链条的 for 循环（解决八股文割裂）
+          // 3. 核心执行逻辑（整篇生成 + 诊断报告推送）
           // ============================================================
           let debugLog = "# 🩺 文章生成深度诊断报告\n\n";
-          let finalText = "";
-          let previousContext = "这是文章的开头，请直接破题。";
 
-          for (let i = 0; i < slices.length; i++) {
-            const slice = slices[i];
+          sendEvent(controller, 'writing', '正在一气呵成撰写深度长文初稿...');
+          const writerUserPrompt = `请以此主题写一篇完整的自媒体爆文：${topic}\n【再次重申红线】：逼近 ${targetWordCount} 字！正文严禁废话开头！绝不刻意堆砌任何口语词汇！打破段落内部的对称性！`;
+          const draftText = await fetchLLM(model, writerPrompt, writerUserPrompt, { temperature: 0.85, stream: false });
 
-            // 1. 撰写初稿（将 previousContext 喂给模型）
-            sendEvent(controller, 'writing', `正在撰写第 ${i + 1}/${sliceCount} 幕...`);
-            const writerUserPrompt = `【上文结尾】：${previousContext}\n\n【本段意图】：${slice.intent}\n【字数强制指令】：本段字数必须严格控制在 ${minWords} 到 ${maxWords} 字之间！请通过多角度说理和心理白描来扩充篇幅，达到字数立刻收尾！`;
-            const draftText = await fetchLLM(model, writerPrompt, writerUserPrompt, { temperature: 0.8, stream: false });
+          debugLog += `### 📝 原始初稿 (Draft)\n\n${draftText}\n\n---\n\n`;
+          sendEvent(controller, 'chunk_done', '初稿撰写完成，主编正在执行宏观反模版扫描...', debugLog);
 
-            // 2. 质检与修复
-            sendEvent(controller, 'checking', `正在对第 ${i + 1} 幕进行靶向扫描...`);
-            const fixedText = await fetchLLM(model, qaPrompt, `审查并去AI化此段：${draftText}`, { temperature: 0.9, frequency_penalty: 0.6, stream: false });
+          sendEvent(controller, 'checking', '正在猎杀模板化结构与生硬过渡...');
+          const qaUserPrompt = `请严格按照指令，从宏观结构上审查并精修以下完整初稿（切记打破段落间的雷同感且保护总字数）：\n\n${draftText}`;
+          const fixedText = await fetchLLM(model, qaPrompt, qaUserPrompt, { temperature: 0.9, frequency_penalty: 0.8, stream: false });
 
-            // 3. 🎯 【新增：拼装诊断日志】
-            debugLog += `### 【切片 ${i + 1}】\n\n`;
-            debugLog += `**📌 蓝图意图 (Intent)**:\n> ${slice.intent}\n\n`;
-            debugLog += `**📝 初稿 (Draft)**:\n${draftText}\n\n`;
-            debugLog += `**🔧 质检后 (Fixed)**:\n${fixedText}\n\n`;
-            debugLog += `---\n\n`;
-
-            // 4. 拼装最终文章并更新记忆
-            finalText += fixedText + "\n\n";
-            const lastChars = fixedText.length > 150 ? fixedText.slice(-150) : fixedText;
-            previousContext = `上文结尾内容是："...${lastChars}"。请你接着这段话往下自然延伸，严禁另起炉灶或使用并列词语。`;
-
-            // 5. 推送给前端（将诊断日志和最终文章一起推送）
-            const outputToFrontend = debugLog + "### 📖 最终合成文章\n\n" + finalText;
-            sendEvent(controller, 'chunk_done', `第 ${i + 1} 幕打磨完成`, outputToFrontend);
-          }
-
-          // 循环结束后
-          const finalOutput = debugLog + "### 📖 最终合成文章\n\n" + finalText;
-          sendEvent(controller, 'done', '生成与诊断完成！', finalOutput);
+          const finalOutput = debugLog + `### 📖 最终质检文章 (Fixed)\n\n${fixedText}`;
+          sendEvent(controller, 'done', '生成与质检彻底完成！', finalOutput);
           controller.close();
         } catch (error: any) {
           console.error('流处理错误:', error);
