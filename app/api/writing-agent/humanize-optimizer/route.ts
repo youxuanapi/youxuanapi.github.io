@@ -2,72 +2,85 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
-    const { content, apiBaseUrl, apiKey, model } = await request.json();
+    const body = await request.json();
+    const { content: originalText, apiBaseUrl, apiKey, model } = body;
 
-    if (!content) return NextResponse.json({ error: '请提供需要优化的文本' }, { status: 400 });
+    if (!originalText) return NextResponse.json({ error: '请提供需要优化的文本' }, { status: 400 });
     if (!apiBaseUrl || !apiKey || !model) return NextResponse.json({ error: '请先配置API' }, { status: 400 });
 
-    const systemPrompt = `你是一位顶级专栏主编。请将用户发来的机器味初稿，精修润色为"充满人类真实情绪、排版舒适"的高质量爆款文。
+    const fetchLLM = async (
+      model: string,
+      systemPrompt: string,
+      userPrompt: string,
+      options: { temperature: number; stream: boolean; frequency_penalty?: number }
+    ) => {
+      const response = await fetch(`${apiBaseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          temperature: options.temperature,
+          stream: options.stream,
+          frequency_penalty: options.frequency_penalty
+        }),
+      });
 
-【高级拟人润色法则】
-1. 斩断播音腔：删除"首先、其次、不可否认"等结构化套话。将宏大的形容词替换为接地气的动作描写。
-2. 建立呼吸感：打碎长段落，频繁换行。下结论时单句成段。
-3. 心流式过渡：用情绪推动段落，必须自然使用"其实、但是、所以、说实话"等人类连词。
-4. 【巧妙使用口语化倒装（反检测核心）】：绝对不要使用语无伦次的病态倒装。你需要模拟人类激动或随性说话时的『结论前置、补充后置』的自然倒装（补述）习惯，打破 AI 常见的顺向逻辑链。
-   - 错误示范（病态倒装）：没出门，因为今天雨实在是太大了，所以。
-   - 正确示范（人类自然倒装）：今天我根本没法出门，雨实在是太大了。 / 这钱花得我真憋屈，说实话。 / 真的别搞这种自我感动式的爱了，行不行啊。
-   请在润色后的文章中，自然地穿插 2-3 处这样的口语化倒装结构。
+      if (!response.ok) throw new Error(`LLM 调用失败: ${response.status}`);
 
-直接输出精修后的纯文本正文，不带任何解析或Markdown代码块。`;
-
-    const response = await fetch(`${apiBaseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: `请深度润色以下初稿：\n\n${content}` }
-        ],
-        temperature: 0.8,
-        frequency_penalty: 0.5,
-        stream: true,
-      }),
-    });
-
-    if (!response.ok) throw new Error(`优化请求失败: ${response.status}`);
+      const data = await response.json();
+      return data.choices?.[0]?.message?.content || '';
+    };
 
     const encoder = new TextEncoder();
-    const decoder = new TextDecoder();
+
     const stream = new ReadableStream({
       async start(controller) {
-        const reader = response.body?.getReader();
-        if (!reader) { controller.close(); return; }
-        let buffer = '';
         try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-            for (const line of lines) {
-              const trimmed = line.trim();
-              if (!trimmed || trimmed === 'data: [DONE]') continue;
-              if (trimmed.startsWith('data: ')) {
-                try {
-                  const data = JSON.parse(trimmed.slice(6));
-                  const delta = data.choices?.[0]?.delta?.content;
-                  if (delta) controller.enqueue(encoder.encode(delta));
-                } catch (e) {}
-              }
-            }
-          }
-        } finally { controller.close(); reader.releaseLock(); }
-      }
+          const sendEvent = (controller: any, status: string, message: string, content = '') => {
+            const payload = JSON.stringify({ status, message, content });
+            controller.enqueue(encoder.encode(`data: ${payload}\n\n`));
+          };
+
+          let debugLog = "# 🩺 变色龙V6.1微创降重报告\n\n";
+
+          // ============================================================================
+          // 变色龙·无损降重引擎 V6.1 (融雪微创版 + 格式封印)
+          // ============================================================================
+          const humanizePrompt = `你是一位顶级的"文本伪装大师"和"资深编辑"。你收到了一篇需要降低 AI 痕迹的文章。
+核心原则：文章质量绝对不能下降，专业度和调性必须100%保留！
+
+请执行以下微创降重手术：
+1. 绝对文体自适应：精准识别原文文体。原文是学术干货就保持严谨，原文是散文就保持优雅，绝不强加口语废话。
+2. 融化规整结构：将"一、二、三"等硬排版融化为自然过渡的散文段落。不要生硬罗列。
+3. 猎杀"理科生情感词"与机器高频词：绝对禁止使用"感知系统、考量体系、共同单位、底层逻辑、底层架构、情绪价值、能量场、不可复制、不可否认、赋能、松弛感、本质上、瞬息万变、共鸣、羁绊"等机器爱用的高级分析词汇！必须降级为最平实的人类白话。
+4. 强行打断内部排比：如果原文连续举了三个相似的例子（A；B；C结构），你必须砍掉其中一个，或者把其中一个扩展成带修饰的长句，绝对不允许出现工整对称的排比分句！
+5. 制造极端方差：将平滑的论述拆解为：一个包含复杂定语的极长句，紧接着跟一个极短的裁断句（如：确实如此。/ 并非易事。/ 事实正是如此。/ 答案显然是否定的。）。
+
+【格式输出铁律（绝对红线）：
+绝不允许在生成的正文中出现任何"【】"、"[]"或"()"等指令性中括号！只输出干净的纯文本正文，不要带有任何解析、标题或多余的排版符号。`;
+
+          sendEvent(controller, 'writing', '正在锁定原文调性，执行融雪式去AI味微创手术...');
+          const userPrompt = `请严格按照V6.1法则，在保持原文高质量和专业调性的前提下，对以下文章进行降重伪装：\n\n${originalText}\n\n【注意】：请直接输出正文，绝对禁止带有任何【】中括号和解析废话！`;
+
+          // 设定温度和惩罚值，保证词汇多样性且打乱困惑度
+          const fixedText = await fetchLLM(model, humanizePrompt, userPrompt, { temperature: 0.85, frequency_penalty: 0.6, stream: false });
+
+          debugLog += `### 📖 降重净化后文章\n\n${fixedText}`;
+          sendEvent(controller, 'done', '微创降重手术彻底完成！', debugLog);
+          controller.close();
+        } catch (error: any) {
+          console.error('流处理错误:', error);
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ status: 'error', message: error.message })}\n\n`));
+          controller.close();
+        }
+      },
     });
 
-    return new NextResponse(stream, { headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' } });
+    return new NextResponse(stream, { headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'keep-alive' } });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || '优化失败' }, { status: 500 });
   }

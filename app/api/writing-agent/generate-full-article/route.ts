@@ -60,6 +60,7 @@ export async function POST(request: NextRequest) {
 【举例铁律与自然语感】：
 6. 真实典故佐证：如果除了感悟，还必须用具体事件来佐证观点，【只能】调取客观存在的名人轶事、历史典故或大众熟知的真实社会新闻。
 7. 词汇的自然生态：不要刻意套用公式！可以有"犯不上、吃力不讨好"的接地气，也可以有"本质上"的逻辑梳理。顺其自然地表达，绝对禁止刻意堆砌同样的词汇，绝对禁止每一段使用对称的结构排比。
+8. 错落有致的呼吸感（打破单调）：绝不能通篇都是单调的"我/它/某人怎么样"的顺装长句。在强调痛点情绪或文末抒发感悟时，请自然穿插少量的"倒装句"或"省略主语的短句"（如：与过往和解，终是人生必修课）。严禁刻意卖弄和生硬堆砌！
 `;
 
     // Agent 2：全局质检员 (专杀走剧情的机器味与对称性)
@@ -89,7 +90,7 @@ export async function POST(request: NextRequest) {
           let debugLog = "# 🩺 文章生成深度诊断报告\n\n";
 
           sendEvent(controller, 'writing', '正在一气呵成撰写深度长文初稿...');
-          const writerUserPrompt = `请以此主题写一篇完整的深度感悟文章：${topic}\n【再次重申红线】：逼近 ${targetWordCount} 字！绝不编造虚假故事，重在感悟与剖析！严格区分"这种人"和"你"的人称使用！`;
+          const writerUserPrompt = `请以此主题写一篇完整的深度感悟文章：${topic}\n【再次重申红线】：逼近 ${targetWordCount} 字！绝不编造虚假故事，重在感悟与剖析！严格区分人称，自然穿插倒装句打破单调！`;
           const draftText = await fetchLLM(model, writerPrompt, writerUserPrompt, { temperature: 0.85, stream: false });
 
           debugLog += `### 📝 原始初稿 (Draft)\n\n${draftText}\n\n---\n\n`;
