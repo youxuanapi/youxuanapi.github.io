@@ -370,4 +370,17 @@ code, pre, kbd, samp {
   .animate-aurora {
     animation: aurora 20s ease-in-out infinite;
   }
+
+  /* 苹果风扫光 / 流光特效 */
+  @keyframes sweep {
+    0% {
+      transform: translateX(-100%) skewX(-45deg);
+    }
+    20% {
+      transform: translateX(200%) skewX(-45deg);
+    }
+    100% {
+      transform: translateX(200%) skewX(-45deg);
+    }
+  }
 }

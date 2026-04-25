@@ -1,13 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getOfficialPrompt, isOfficialStyle } from '../../../lib/official-prompts';
+import { decryptPrompt } from '../../../lib/crypto-utils';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     // 1. 提取参数与初始化
-    const { topic, requirements, persona, apiBaseUrl, apiKey, model, targetWordCount = 1100 } = body;
+    const { topic, requirements, persona, apiBaseUrl, apiKey, model, targetWordCount = 1100, template, encryptedPrompt } = body;
 
     if (!topic) return NextResponse.json({ error: '请输入写作主题' }, { status: 400 });
     if (!apiBaseUrl || !apiKey || !model) return NextResponse.json({ error: '请先配置API' }, { status: 400 });
+
+    // ============================================================================
+    // 2. 提示词安全解析（黑盒化核心逻辑）
+    // ============================================================================
+    let writerPrompt: string;
+
+    if (template && isOfficialStyle(template)) {
+      // 官方模板：从后端字典安全提取
+      const officialPrompt = getOfficialPrompt(template);
+      if (!officialPrompt) {
+        return NextResponse.json({ error: '无效的官方风格模板' }, { status: 400 });
+      }
+      writerPrompt = officialPrompt.replace('{{targetWordCount}}', String(targetWordCount));
+    } else if (encryptedPrompt) {
+      // 用户自定义：解密加密后的提示词
+      try {
+        writerPrompt = decryptPrompt(encryptedPrompt);
+      } catch (err) {
+        console.error('解密自定义提示词失败:', err);
+        return NextResponse.json({ error: '自定义风格解密失败，请重新提取' }, { status: 400 });
+      }
+    } else {
+      // 默认回退到 insight 风格
+      const fallbackPrompt = getOfficialPrompt('insight');
+      if (!fallbackPrompt) {
+        return NextResponse.json({ error: '系统默认风格加载失败' }, { status: 500 });
+      }
+      writerPrompt = fallbackPrompt.replace('{{targetWordCount}}', String(targetWordCount));
+    }
 
     // ============================================================================
     // 内部通用 fetchLLM 方法
@@ -39,26 +70,6 @@ export async function POST(request: NextRequest) {
       return data.choices?.[0]?.message?.content || '';
     };
 
-    // ============================================================================
-    // 2. 定义双 Agent 的思想者终极 Prompt
-    // ============================================================================
-    // Agent 1：全篇撰写者 (重感悟轻叙事，严格人称控制，真实典故佐证)
-    const writerPrompt = `
-你是一位阅历丰富、对人性有深刻洞察的独立作者。你不写套路文，只写自己真实的所思所想与社会感悟。
-【核心任务】：撰写一篇深度剖析人情世故的清单体文章，字数逼近 ${targetWordCount} 字。
-
-【核心创作铁律】：
-1. 写感悟，绝不写剧本：【绝对红线】禁止编造“我发小、我同事、我朋友”等虚假个人经历。现象描述只需一笔带过，必须把 80% 的笔墨用于思想感悟和心理诛心。
-2. 人称三角法则：
-   - 负面反例：一律用模糊群体（如“这种人”、“有些人”、“大多数人”），绝不使用“你/他”。
-   - “你”的克制使用：只用于和读者交心，每段严控1-2个。
-   - “我/我们”：用于代表思想的源头和情绪的共鸣。
-3. 真实典故佐证：如果必须举例，【只能】使用客观存在的名人轶事、历史典故或熟知的社会新闻，严禁捏造虚假小故事。
-4. 错落呼吸感：严禁使用对称的排比句（如：一是...二是...）。在强调情绪痛点或文末总结时，自然穿插倒装句或省略主语的短句，制造长短句突变。
-
-【绝对红线】：直接输出纯文本正文。严禁带有任何【】等解析标记，严禁在开头写“初稿”、“终稿”、“标题”等任何废话！
-`;
-
     const encoder = new TextEncoder();
 
     const stream = new ReadableStream({
@@ -70,7 +81,7 @@ export async function POST(request: NextRequest) {
           };
 
           // ============================================================================
-          // 核心执行逻辑：去除质检员，一气呵成
+          // 核心执行逻辑
           // ============================================================================
           let debugLog = "# 🧠 思想者V15单刀直出报告\n\n";
 

@@ -310,6 +310,7 @@ export const useWritingAgentStore = create<WritingAgentStore>()(
         storage: createJSONStorage(() => localStorage),
         partialize: (state) => ({
           taskHistory: state.taskHistory.slice(0, 50),
+          personas: state.personas,
         }),
       }
     )

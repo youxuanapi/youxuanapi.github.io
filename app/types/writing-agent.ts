@@ -136,6 +136,8 @@ export interface WritingPersona {
     preferred: string[];
     avoided: string[];
   };
+  subTag?: string;
+  encryptedPrompt?: string;
   createdAt: string;
   updatedAt: string;
   lastUsedAt?: string;
