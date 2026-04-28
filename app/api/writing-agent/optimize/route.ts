@@ -509,24 +509,14 @@ ${zone === 'HIGH_WEIGHT'
 - "别装了，谁不知道怎么回事"
 </Grammar_Flaw_Allowance>
 
-<Rule_A_Zero_Rhetorical_Policy>
-绝对封杀反问句和设问句！这是最高优先级红线！
-1. 封杀句式：禁止出现"难道…"、"怎么能…"、"谁没…"、"岂不是…"、"怎能…"。
-2. 封杀标点与语气词：禁止句子以"吗？"、"呢？"、"啊？"、"吧？"结尾。
-3. 替代方案：将所有带有情绪的疑问全部压实为冷峻的客观陈述句。
-   - "难道这不是尊重吗？" → "这就是最妥帖的尊重。"
-   - "怎么能说没有意义呢？" → "说它没有意义，站不住脚。"
-   - "谁没经历过低谷？" → "低谷是每个人都绕不过去的。"
-违反此规则即判定任务失败！
-</Rule_A_Zero_Rhetorical_Policy>
+[Rule_A: Zero-Rhetorical Policy]
+严禁在生成的文本中使用任何反问句或设问句。
+- 禁用词：难道、怎么能、谁没。
+- 禁用标点：句子严禁以"吗？"、"呢？"、"啊？"、"吧？"结尾。
+- 强制转化：所有情绪表达必须压实为冷峻、笃定的【客观陈述句】。
 
-<Rule_B_Declarative_Inversion>
-为了制造 Burstiness（突发性），允许使用倒装句（如宾语前置、状语后置），但必须是陈述语气。
-- 宾语前置："我们不能随意评价别人的人生" → "别人的人生，轮不到外人来定性。"
-- 状语后置："他在深夜独自写完了那封信" → "那封信，他在深夜独自写完。"
-- 主语延迟："这件事的本质其实很简单" → "说到底，就这么回事。"
-倒装是制造突发性的正确手段，反问句不是。
-</Rule_B_Declarative_Inversion>
+[Rule_B: Declarative Inversion]
+为了制造 Burstiness（突发性），必须使用陈述型倒装（如宾语前置），严禁使用口语化语气词凑字数。
 
 </Protocol_V9_7>
 
@@ -585,9 +575,9 @@ async function callLLMWithRetry(
       const data = await response.json();
       const content = data.choices?.[0]?.message?.content || '';
 
-      const rhetoricalPattern = /(?:难道|怎么能|谁没|岂不是|怎能).*?[？?]/g;
-      const trailingQuestionPattern = /[吗呢啊吧][？?][。！]?\s*$/gm;
-      if (rhetoricalPattern.test(content) || trailingQuestionPattern.test(content)) {
+      const rhetoricalPattern = /(难道|怎么能|谁没).*?\?/g;
+      if (rhetoricalPattern.test(content)) {
+        console.error('[REGEX INTERCEPTOR] callLLMWithRetry 命中反问句红线，重试中:', content);
         if (attempt < maxRetries) {
           const delay = Math.pow(2, attempt) * 1000;
           await new Promise((resolve) => setTimeout(resolve, delay));
@@ -723,6 +713,17 @@ export async function POST(request: NextRequest) {
               sendEvent('sentence_error', {
                 index: i + 1,
                 message: `句子 ${i + 1} 改写失败，保留原文`,
+              });
+              rewrittenSentence = item.sentence;
+            }
+
+            // [REGEX INTERCEPTOR] 动态拦截反问句
+            const rhetoricalPattern = /(难道|怎么能|谁没).*?\?/g;
+            if (rhetoricalPattern.test(rewrittenSentence)) {
+              console.error(`[REGEX INTERCEPTOR] 句子 ${i + 1} 命中反问句红线，已废弃:`, rewrittenSentence);
+              sendEvent('sentence_error', {
+                index: i + 1,
+                message: `句子 ${i + 1} 触发反问句红线，已拦截废弃，保留原文`,
               });
               rewrittenSentence = item.sentence;
             }
