@@ -5,7 +5,130 @@ import { useWritingAgentStore } from '../../store/writing-agent-store';
 import { useEditorStore } from '../../store/editorStore';
 import type { WritingPersona, Outline, OutlineSection, Paragraph, TaskProgress } from '../../types/writing-agent';
 import { cn } from '../../lib/utils';
-import { FileText, TrendingUp, PenLine, UserCheck, Loader2 } from 'lucide-react';
+import { FileText, TrendingUp, PenLine, UserCheck, Loader2, Activity, Shield, AlertTriangle } from 'lucide-react';
+
+interface DiffSegment {
+  type: 'unchanged' | 'deleted' | 'added';
+  text: string;
+}
+
+function computeCharDiff(oldStr: string, newStr: string): DiffSegment[] {
+  if (!oldStr && !newStr) return [];
+  if (!oldStr) return [{ type: 'added', text: newStr }];
+  if (!newStr) return [{ type: 'deleted', text: oldStr }];
+
+  const segments: DiffSegment[] = [];
+  let i = 0;
+  let j = 0;
+
+  const oldChars = [...oldStr];
+  const newChars = [...newStr];
+
+  const lcs = computeLCS(oldChars, newChars);
+  let lcsIdx = 0;
+
+  while (i < oldChars.length || j < newChars.length) {
+    if (lcsIdx < lcs.length) {
+      if (i < oldChars.length && oldChars[i] === lcs[lcsIdx] && j < newChars.length && newChars[j] === lcs[lcsIdx]) {
+        let unchanged = '';
+        while (lcsIdx < lcs.length && i < oldChars.length && j < newChars.length && oldChars[i] === lcs[lcsIdx] && newChars[j] === lcs[lcsIdx]) {
+          unchanged += lcs[lcsIdx];
+          i++;
+          j++;
+          lcsIdx++;
+        }
+        segments.push({ type: 'unchanged', text: unchanged });
+      } else {
+        let deleted = '';
+        while (i < oldChars.length && (lcsIdx >= lcs.length || oldChars[i] !== lcs[lcsIdx])) {
+          deleted += oldChars[i];
+          i++;
+        }
+        if (deleted) segments.push({ type: 'deleted', text: deleted });
+
+        let added = '';
+        while (j < newChars.length && (lcsIdx >= lcs.length || newChars[j] !== lcs[lcsIdx])) {
+          added += newChars[j];
+          j++;
+        }
+        if (added) segments.push({ type: 'added', text: added });
+      }
+    } else {
+      if (i < oldChars.length) {
+        segments.push({ type: 'deleted', text: oldChars.slice(i).join('') });
+        i = oldChars.length;
+      }
+      if (j < newChars.length) {
+        segments.push({ type: 'added', text: newChars.slice(j).join('') });
+        j = newChars.length;
+      }
+    }
+  }
+
+  return mergeSegments(segments);
+}
+
+function computeLCS(a: string[], b: string[]): string[] {
+  const m = a.length;
+  const n = b.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (a[i - 1] === b[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1] + 1;
+      } else {
+        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+      }
+    }
+  }
+
+  const result: string[] = [];
+  let i = m;
+  let j = n;
+  while (i > 0 && j > 0) {
+    if (a[i - 1] === b[j - 1]) {
+      result.unshift(a[i - 1]);
+      i--;
+      j--;
+    } else if (dp[i - 1][j] > dp[i][j - 1]) {
+      i--;
+    } else {
+      j--;
+    }
+  }
+  return result;
+}
+
+function mergeSegments(segments: DiffSegment[]): DiffSegment[] {
+  const merged: DiffSegment[] = [];
+  for (const seg of segments) {
+    const last = merged[merged.length - 1];
+    if (last && last.type === seg.type) {
+      last.text += seg.text;
+    } else {
+      merged.push({ ...seg });
+    }
+  }
+  return merged;
+}
+
+interface SentenceResult {
+  index: number;
+  total: number;
+  original: string;
+  rewritten: string;
+  aiScore: number;
+  perplexity: number;
+  isSafe: boolean;
+}
+
+interface ScanResult {
+  total: number;
+  dangerous: number;
+  safe: number;
+  avgPerplexity: number;
+}
 
 interface WritingAgentUIProps {
   className?: string;
@@ -65,6 +188,16 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
   const [streamError, setStreamError] = useState("");
   const [hasStartedTask, setHasStartedTask] = useState(false);
   const [currentStage, setCurrentStage] = useState<string>("");
+  const [genre, setGenre] = useState('\u901a\u7528\u8bae\u8bba\u6587');
+  const typewriterQueueRef = useRef<string>('');
+  const typewriterTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [typewriterDisplay, setTypewriterDisplay] = useState('');
+
+  const [sentenceResults, setSentenceResults] = useState<SentenceResult[]>([]);
+  const [scanResult, setScanResult] = useState<ScanResult | null>(null);
+  const [perplexityHistory, setPerplexityHistory] = useState<number[]>([]);
+  const [currentAvgPerplexity, setCurrentAvgPerplexity] = useState(0);
+  const [lockedSentences, setLockedSentences] = useState<Set<number>>(new Set());
 
   const LOADING_MESSAGES = [
     "🌐 正在初始化专属引擎，建立神经元风格链路...",
@@ -90,6 +223,30 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
 
   const progressRef = useRef(0);
   const logsRef = useRef<string[]>([]);
+
+  useEffect(() => {
+    if (!isStreaming && typewriterQueueRef.current.length === 0) return;
+    typewriterTimerRef.current = setInterval(() => {
+      const queue = typewriterQueueRef.current;
+      if (queue.length === 0) return;
+      const chunkSize = Math.min(2, queue.length);
+      const charsToRender = queue.slice(0, chunkSize);
+      typewriterQueueRef.current = queue.slice(chunkSize);
+      setTypewriterDisplay((prev) => prev + charsToRender);
+    }, 15);
+    return () => {
+      if (typewriterTimerRef.current) {
+        clearInterval(typewriterTimerRef.current);
+      }
+    };
+  }, [isStreaming]);
+
+  useEffect(() => {
+    if (!isStreaming && typewriterQueueRef.current.length > 0) {
+      setTypewriterDisplay((prev) => prev + typewriterQueueRef.current);
+      typewriterQueueRef.current = '';
+    }
+  }, [isStreaming]);
 
   useEffect(() => {
     loadLocalPersonas();
@@ -163,7 +320,14 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
     setStreamError("");
     setStreamContent("");
     setHasStartedTask(true);
-    setCurrentStage("准备阶段");
+    setCurrentStage("\u51c6\u5907\u9636\u6bb5");
+    typewriterQueueRef.current = '';
+    setTypewriterDisplay('');
+    setSentenceResults([]);
+    setScanResult(null);
+    setPerplexityHistory([]);
+    setCurrentAvgPerplexity(0);
+    setLockedSentences(new Set());
     
     // 检查API配置
     if (!apiConfig?.apiKey || !apiConfig?.apiBaseUrl || !apiConfig?.model) {
@@ -185,12 +349,11 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
       return;
     }
     
-    setCurrentStage("发送请求");
+    setCurrentStage("\u53d1\u9001\u8bf7\u6c42");
     
-    // 判定当前是卡片1还是卡片2，决定调用哪个API (请根据你实际的路由地址微调 url)
     const apiUrl = activeMode === 'create' 
       ? "/api/writing-agent/generate-full-article" 
-      : "/api/writing-agent/humanize-optimizer";
+      : "/api/writing-agent/optimize";
     
     // 获取选中的persona对象
     const selectedPersona = personas.find(p => p.id === selectedPersonaId);
@@ -225,14 +388,15 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
       encryptedPrompt: isCustomStyle ? (selectedPersona as any).encryptedPrompt : undefined,
       isAntiAiMode
     } : {
-      content: sourceArticle,
+      text: sourceArticle,
+      genre: genre || '\u901a\u7528\u8bae\u8bba\u6587',
       apiBaseUrl: apiConfig.apiBaseUrl,
       apiKey: apiConfig.apiKey,
       model: apiConfig.model
     };
 
     try {
-      setCurrentStage("连接API");
+      setCurrentStage("\u8fde\u63a5API");
       const response = await fetch(apiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -240,14 +404,13 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
       });
 
       if (!response.ok) {
-        throw new Error(`引擎响应异常: ${response.statusText}`);
+        throw new Error(`\u5f15\u64ce\u54cd\u5e94\u5f02\u5e38: ${response.statusText}`);
       }
 
-      setCurrentStage("接收数据");
-      // 2. 核心：解析 SSE JSON 格式
+      setCurrentStage("\u63a5\u6536\u6570\u636e");
       const reader = response.body?.getReader();
       const decoder = new TextDecoder("utf-8");
-      if (!reader) throw new Error("无法建立流式连接");
+      if (!reader) throw new Error("\u65e0\u6cd5\u5efa\u7acb\u6d41\u5f0f\u8fde\u63a5");
 
       let buffer = "";
       let done = false;
@@ -269,39 +432,83 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
               try {
                 const jsonStr = trimmed.slice(6);
                 const data = JSON.parse(jsonStr);
+                const eventType = data.event || data.status;
                 
-                // 更新当前阶段显示
                 if (data.message) {
                   setCurrentStage(data.message);
                 }
                 
-                // 更新内容（如果有的话）
-                if (data.content) {
-                  setStreamContent(data.content);
-                }
-                
-                // 检查是否完成
-                if (data.status === 'done') {
-                  setCurrentStage("完成");
-                }
-                
-                // 检查错误
-                if (data.status === 'error') {
-                  setStreamError(data.message || "生成过程出错");
-                  setCurrentStage("失败");
+                if (activeMode === 'humanize') {
+                  if (eventType === 'scan_result') {
+                    setScanResult({
+                      total: data.total,
+                      dangerous: data.dangerous,
+                      safe: data.safe,
+                      avgPerplexity: data.avgPerplexity,
+                    });
+                    setCurrentAvgPerplexity(data.avgPerplexity);
+                    setPerplexityHistory([data.avgPerplexity]);
+                  }
+                  if (eventType === 'sentence_safe' && data.content) {
+                    setSentenceResults(prev => [...prev, {
+                      index: data.index,
+                      total: data.total,
+                      original: data.content,
+                      rewritten: data.content,
+                      aiScore: data.aiScore,
+                      perplexity: data.perplexity,
+                      isSafe: true,
+                    }]);
+                    setStreamContent(prev => prev + data.content);
+                  }
+                  if (eventType === 'sentence_done' && data.rewritten) {
+                    setSentenceResults(prev => [...prev, {
+                      index: data.index,
+                      total: data.total,
+                      original: data.original || '',
+                      rewritten: data.rewritten,
+                      aiScore: data.aiScore || 0,
+                      perplexity: data.perplexity || 0,
+                      isSafe: false,
+                    }]);
+                    if (data.avgPerplexity !== undefined) {
+                      setCurrentAvgPerplexity(data.avgPerplexity);
+                      setPerplexityHistory(prev => [...prev, data.avgPerplexity]);
+                    }
+                    typewriterQueueRef.current += data.rewritten;
+                    setStreamContent(prev => prev + data.rewritten);
+                  }
+                  if (eventType === 'done') {
+                    setCurrentStage("\u5b8c\u6210");
+                  }
+                  if (eventType === 'error') {
+                    setStreamError(data.message || "\u4f18\u5316\u8fc7\u7a0b\u51fa\u9519");
+                    setCurrentStage("\u5931\u8d25");
+                  }
+                } else {
+                  if (data.content) {
+                    setStreamContent(data.content);
+                  }
+                  if (data.status === 'done') {
+                    setCurrentStage("\u5b8c\u6210");
+                  }
+                  if (data.status === 'error') {
+                    setStreamError(data.message || "\u751f\u6210\u8fc7\u7a0b\u51fa\u9519");
+                    setCurrentStage("\u5931\u8d25");
+                  }
                 }
               } catch (e) {
-                console.error('解析 SSE 数据失败:', e);
+                console.error('\u89e3\u6790 SSE \u6570\u636e\u5931\u8d25:', e);
               }
             }
           }
         }
       }
     } catch (err: any) {
-      setStreamError(err.message || "网络异常或请求超时，请重试");
-      setCurrentStage("失败");
+      setStreamError(err.message || "\u7f51\u7edc\u5f02\u5e38\u6216\u8bf7\u6c42\u8d85\u65f6\uff0c\u8bf7\u91cd\u8bd5");
+      setCurrentStage("\u5931\u8d25");
     } finally {
-      setIsStreaming(false); // 彻底结束
+      setIsStreaming(false);
     }
   };
 
@@ -583,18 +790,47 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
               )}
             </>
             ) : (
-              <div>
-                <label className="block text-sm font-semibold text-indigo-500 dark:text-indigo-300 mb-2 transition-colors duration-300">
-                  待润色的初稿内容 <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  value={sourceArticle}
-                  onChange={(e) => setSourceArticle(e.target.value)}
-                  placeholder="请在此粘贴由其他 AI 生成的初始文本。系统将通过自然语言处理引擎进行深度重写与情感注入..."
-                  rows={12}
-                  className="w-full px-4 py-3 bg-indigo-50/30 dark:bg-[#0F0A1E] border border-indigo-100 dark:border-indigo-500/20 rounded-xl focus:ring-2 focus:ring-indigo-400 dark:focus:ring-indigo-500 focus:border-indigo-400 dark:focus:border-indigo-500 text-slate-900 dark:text-indigo-100 text-base transition-colors placeholder-slate-400 dark:placeholder-indigo-400/40"
-                  disabled={isRunning}
-                />
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-indigo-500 dark:text-indigo-300 mb-2 transition-colors duration-300">
+                    待润色的初稿内容 <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={sourceArticle}
+                    onChange={(e) => setSourceArticle(e.target.value)}
+                    placeholder="请在此粘贴由其他 AI 生成的初始文本。系统将通过自然语言处理引擎进行深度重写与情感注入..."
+                    rows={12}
+                    className="w-full px-4 py-3 bg-indigo-50/30 dark:bg-[#0F0A1E] border border-indigo-100 dark:border-indigo-500/20 rounded-xl focus:ring-2 focus:ring-indigo-400 dark:focus:ring-indigo-500 focus:border-indigo-400 dark:focus:border-indigo-500 text-slate-900 dark:text-indigo-100 text-base transition-colors placeholder-slate-400 dark:placeholder-indigo-400/40"
+                    disabled={isRunning}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-blue-500 dark:text-blue-300 mb-2 transition-colors duration-300">
+                    文体类型
+                  </label>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {[
+                      { value: '\u901a\u7528\u8bae\u8bba\u6587', label: '\u8bae\u8bba\u6587', sub: '\u901a\u7528' },
+                      { value: '\u5b66\u672f\u8bba\u6587', label: '\u5b66\u672f\u8bba\u6587', sub: '\u4e25\u8c28' },
+                      { value: '\u6563\u6587/\u968f\u7b14', label: '\u6563\u6587', sub: '\u4f18\u96c5' },
+                      { value: '\u65b0\u5a92\u4f53\u6587\u7ae0', label: '\u65b0\u5a92\u4f53', sub: '\u6d3b\u6cfc' },
+                    ].map((g) => (
+                      <div
+                        key={g.value}
+                        onClick={() => setGenre(g.value)}
+                        className={cn(
+                          'flex flex-col items-center justify-center p-3 rounded-xl border-2 cursor-pointer transition-all duration-300',
+                          genre === g.value
+                            ? 'border-blue-500 bg-blue-50/60 dark:bg-blue-500/10 shadow-md -translate-y-0.5'
+                            : 'border-slate-200 dark:border-blue-500/20 bg-white hover:border-blue-300 hover:shadow-sm'
+                        )}
+                      >
+                        <span className="text-sm font-bold text-slate-800 dark:text-blue-100">{g.label}</span>
+                        <span className="text-xs text-slate-500 dark:text-blue-300/70 mt-1">{g.sub}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
 
@@ -954,10 +1190,18 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
                 </svg>
                 <span className="font-medium">字数统计：</span>
                 <span className="font-bold text-indigo-600">{streamContent.length}</span>
+                {scanResult && (
+                  <span className="ml-3 text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-600 border border-green-200">
+                    {scanResult.safe} 句安全 / {scanResult.dangerous} 句改写
+                  </span>
+                )}
               </div>
               <button
                 onClick={() => {
-                  navigator.clipboard.writeText(streamContent);
+                  const textToCopy = activeMode === 'humanize' && sentenceResults.length > 0
+                    ? sentenceResults.map(r => lockedSentences.has(r.index) ? r.original : r.rewritten).join('')
+                    : streamContent;
+                  navigator.clipboard.writeText(textToCopy);
                   setCopied(true);
                   setTimeout(() => setCopied(false), 2000);
                 }}
@@ -982,43 +1226,266 @@ export default function WritingAgentUI({ className }: WritingAgentUIProps) {
             </div>
           )}
 
-          <div className="p-4 md:p-6">
-            {/* 状态 1：报错拦截 */}
-            {streamError && (
-              <div className="p-4 bg-red-50 border border-red-100 rounded-xl mb-4 text-red-600">
-                <p className="font-bold flex items-center gap-2">❌ 引擎启动失败</p>
-                <p className="text-sm mt-1">{streamError}</p>
-              </div>
-            )}
+          <div className="flex">
+            {/* 主内容区 */}
+            <div className="flex-1 p-4 md:p-6">
+              {/* 状态 1：报错拦截 */}
+              {streamError && (
+                <div className="p-4 bg-red-50 border border-red-100 rounded-xl mb-4 text-red-600">
+                  <p className="font-bold flex items-center gap-2">❌ 引擎启动失败</p>
+                  <p className="text-sm mt-1">{streamError}</p>
+                </div>
+              )}
 
-            {/* 状态 2：骨架屏预热 (发起请求但还没收到第一个字) */}
-            {isStreaming && !streamContent && !streamError && (
-              <div className="flex flex-col items-center justify-center h-full min-h-[150px] py-8">
-                <Loader2 className="w-5 h-5 animate-spin text-indigo-400 mb-4" />
-                <p
-                  className="font-medium text-slate-500 tracking-wide text-sm text-center transition-opacity duration-300"
-                  style={{ opacity: loadingFade ? 1 : 0 }}
-                >
-                  {LOADING_MESSAGES[loadingMsgIndex]}
-                </p>
-              </div>
-            )}
+              {/* 状态 2：骨架屏预热 */}
+              {isStreaming && !streamContent && !streamError && (
+                <div className="flex flex-col items-center justify-center h-full min-h-[150px] py-8">
+                  <Loader2 className="w-5 h-5 animate-spin text-indigo-400 mb-4" />
+                  <p
+                    className="font-medium text-slate-500 tracking-wide text-sm text-center transition-opacity duration-300"
+                    style={{ opacity: loadingFade ? 1 : 0 }}
+                  >
+                    {LOADING_MESSAGES[loadingMsgIndex]}
+                  </p>
+                </div>
+              )}
 
-            {/* 状态 3：流式打字输出 */}
-            {(streamContent || (!isStreaming && !streamError)) && (
-              <div className="prose prose-slate max-w-none">
-                {/* 阶段显示 */}
-                {currentStage && (
-                  <div className="mb-4 p-2 bg-indigo-50 rounded-lg text-sm text-indigo-600">
-                    <span className="font-medium">当前阶段：</span>{currentStage}
+              {/* 状态 3：Diff 驱动输出 */}
+              {(streamContent || (!isStreaming && !streamError)) && (
+                <div className="prose prose-slate max-w-none">
+                  {currentStage && (
+                    <div className="mb-4 p-2 bg-indigo-50 rounded-lg text-sm text-indigo-600">
+                      <span className="font-medium">当前阶段：</span>{currentStage}
+                    </div>
+                  )}
+
+                  {activeMode === 'humanize' && sentenceResults.length > 0 ? (
+                    <div className="whitespace-pre-wrap text-slate-700 leading-relaxed text-[15px] relative">
+                      {sentenceResults.map((result, idx) => {
+                        const isLocked = lockedSentences.has(result.index);
+
+                        if (result.isSafe || isLocked) {
+                          return (
+                            <span key={idx} className="group relative inline">
+                              {isLocked && (
+                                <span className="absolute -left-5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer" onClick={() => {
+                                  setLockedSentences(prev => {
+                                    const next = new Set(prev);
+                                    next.delete(result.index);
+                                    return next;
+                                  });
+                                }}>
+                                  <span className="text-[10px] text-blue-500 bg-blue-50 rounded px-1 py-0.5 border border-blue-200">🔓</span>
+                                </span>
+                              )}
+                              <span className={isLocked ? 'bg-blue-50/50 rounded px-0.5' : 'text-slate-700'}>
+                                {isLocked ? result.original : result.rewritten}
+                              </span>
+                            </span>
+                          );
+                        }
+
+                        const diff = computeCharDiff(result.original, result.rewritten);
+                        const hasChanges = diff.some(d => d.type !== 'unchanged');
+
+                        if (!hasChanges) {
+                          return (
+                            <span key={idx} className="group relative inline">
+                              <span className="absolute -left-5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer" onClick={() => {
+                                setLockedSentences(prev => {
+                                  const next = new Set(prev);
+                                  next.add(result.index);
+                                  return next;
+                                });
+                              }}>
+                                <span className="text-[10px] text-slate-400 bg-slate-50 rounded px-1 py-0.5 border border-slate-200">🔒</span>
+                              </span>
+                              <span className="text-slate-700">{result.rewritten}</span>
+                            </span>
+                          );
+                        }
+
+                        return (
+                          <span key={idx} className="group relative inline">
+                            <span className="absolute -left-5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer" onClick={() => {
+                              setLockedSentences(prev => {
+                                const next = new Set(prev);
+                                next.add(result.index);
+                                return next;
+                              });
+                            }}>
+                              <span className="text-[10px] text-slate-400 bg-slate-50 rounded px-1 py-0.5 border border-slate-200">🔒</span>
+                            </span>
+                            {diff.map((seg, si) => {
+                              if (seg.type === 'unchanged') {
+                                return <span key={si} className="text-slate-700">{seg.text}</span>;
+                              }
+                              if (seg.type === 'deleted') {
+                                return (
+                                  <span
+                                    key={si}
+                                    className="opacity-30 text-red-500 line-through decoration-red-400 text-[0.85em] rounded px-0.5 transition-opacity duration-500"
+                                  >
+                                    {seg.text}
+                                  </span>
+                                );
+                              }
+                              const charCount = [...seg.text].length;
+                              const growDuration = Math.max(charCount * 0.05, 0.2);
+                              return (
+                                <span
+                                  key={si}
+                                  className="text-emerald-700 rounded px-0.5"
+                                  style={{
+                                    animation: `typeIn ${growDuration}s ease-out, charGrow ${growDuration}s ease-out`,
+                                  }}
+                                >
+                                  {[...seg.text].map((char, ci) => (
+                                    <span
+                                      key={ci}
+                                      style={{
+                                        animationDelay: `${ci * 0.05}s`,
+                                        animation: `charAppear 0.15s ease-out ${ci * 0.05}s both`,
+                                      }}
+                                    >
+                                      {char}
+                                    </span>
+                                  ))}
+                                </span>
+                              );
+                            })}
+                          </span>
+                        );
+                      })}
+                      {isStreaming && (
+                        <span className="inline-block w-0.5 h-[1.1em] bg-blue-500 animate-pulse align-text-bottom ml-0.5" />
+                      )}
+                    </div>
+                  ) : (
+                    <div className="whitespace-pre-wrap text-slate-700 leading-relaxed text-[15px] relative">
+                      {activeMode === 'humanize' ? typewriterDisplay : (streamContent || "等待输入灵感，启动引擎...")}
+                      {activeMode === 'humanize' && isStreaming && (
+                        <span className="inline-block w-0.5 h-[1.1em] bg-blue-500 animate-pulse align-text-bottom ml-0.5" />
+                      )}
+                    </div>
+                  )}
+
+                  {activeMode === 'humanize' && isStreaming && typewriterDisplay && (
+                    <div className="mt-4 pointer-events-none">
+                      <div className="h-1 rounded-full bg-gradient-to-r from-blue-500/0 via-blue-400/60 to-blue-500/0 animate-[shimmer_2s_ease-in-out_infinite]" />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {activeMode === 'humanize' && !isStreaming && streamError && typewriterDisplay && (
+                <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-700 text-sm">
+                  <p className="font-medium">⚠️ 流式传输中断，但已优化的内容已保留。你可以复制已有内容。</p>
+                </div>
+              )}
+            </div>
+
+            {/* 困惑度侧边栏 */}
+            {activeMode === 'humanize' && (scanResult || perplexityHistory.length > 0) && (
+              <div className="w-56 border-l border-slate-100 bg-slate-50/50 p-4 flex flex-col gap-4 shrink-0">
+                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <Activity size={14} />
+                  V9.4 检测面板
+                </div>
+
+                {scanResult && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-xs">
+                      <Shield size={12} className="text-green-500" />
+                      <span className="text-slate-600">安全句</span>
+                      <span className="ml-auto font-bold text-green-600">{scanResult.safe}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs">
+                      <AlertTriangle size={12} className="text-amber-500" />
+                      <span className="text-slate-600">改写句</span>
+                      <span className="ml-auto font-bold text-amber-600">{scanResult.dangerous}</span>
+                    </div>
+                    <div className="h-px bg-slate-200 my-1" />
+                    <div className="text-xs text-slate-500">
+                      总计 <span className="font-bold text-slate-700">{scanResult.total}</span> 句
+                    </div>
                   </div>
                 )}
-                {/* 使用 pre-wrap 保证换行符被正确渲染 */}
-                <div className="whitespace-pre-wrap text-slate-700 leading-relaxed text-[15px]">
-                  {streamContent || "等待输入灵感，启动引擎..."}
+
+                <div className="space-y-1.5">
+                  <div className="text-xs font-medium text-slate-500">全篇平均困惑度</div>
+                  <div className="flex items-end gap-1">
+                    <span className={cn(
+                      'text-2xl font-bold tabular-nums',
+                      currentAvgPerplexity >= 0.6 ? 'text-red-600' : currentAvgPerplexity >= 0.2 ? 'text-amber-600' : 'text-green-600'
+                    )}>
+                      {(currentAvgPerplexity * 100).toFixed(0)}
+                    </span>
+                    <span className="text-xs text-slate-400 mb-1">/100</span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                    <div
+                      className={cn(
+                        'h-full rounded-full transition-all duration-500',
+                        currentAvgPerplexity >= 0.6 ? 'bg-red-500' : currentAvgPerplexity >= 0.2 ? 'bg-amber-500' : 'bg-green-500'
+                      )}
+                      style={{ width: `${Math.min(currentAvgPerplexity * 100, 100)}%` }}
+                    />
+                  </div>
                 </div>
-                {/* 打字时的光标闪烁效果 */}
-                {isStreaming && <span className="inline-block w-1.5 h-4 ml-1 bg-indigo-500 animate-pulse"></span>}
+
+                {perplexityHistory.length > 1 && (
+                  <div className="space-y-1.5">
+                    <div className="text-xs font-medium text-slate-500">困惑度波动</div>
+                    <div className="flex items-end gap-px h-12">
+                      {perplexityHistory.slice(-20).map((val, idx) => (
+                        <div
+                          key={idx}
+                          className={cn(
+                            'flex-1 rounded-t transition-all duration-300',
+                            val >= 0.6 ? 'bg-red-400' : val >= 0.2 ? 'bg-amber-400' : 'bg-green-400'
+                          )}
+                          style={{ height: `${Math.max(val * 100, 8)}%` }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {sentenceResults.length > 0 && (
+                  <div className="space-y-1.5">
+                    <div className="text-xs font-medium text-slate-500">句子状态</div>
+                    <div className="flex flex-wrap gap-1">
+                      {sentenceResults.map((r, idx) => {
+                        const isLowPerplexity = r.perplexity < 0.2 && !r.isSafe;
+                        return (
+                          <div
+                            key={idx}
+                            className={cn(
+                              'w-3 h-3 rounded-sm cursor-pointer transition-all',
+                              lockedSentences.has(r.index) ? 'bg-blue-400 ring-1 ring-blue-300' : isLowPerplexity ? 'bg-red-600 ring-1 ring-red-400' : r.isSafe ? 'bg-green-400' : 'bg-amber-400'
+                            )}
+                            title={`句${r.index}: AI=${(r.aiScore * 100).toFixed(0)}% P=${(r.perplexity * 100).toFixed(0)}%${isLowPerplexity ? ' [RED ZONE]' : ''}${lockedSentences.has(r.index) ? ' [已锁定]' : ''}`}
+                            onClick={() => {
+                              setLockedSentences(prev => {
+                                const next = new Set(prev);
+                                if (next.has(r.index)) next.delete(r.index);
+                                else next.add(r.index);
+                                return next;
+                              });
+                            }}
+                          />
+                        );
+                      })}
+                    </div>
+                    <div className="flex items-center gap-3 text-[10px] text-slate-400 mt-1">
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-green-400" />安全</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-amber-400" />改写</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-red-600" />高危</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-blue-400" />锁定</span>
+                      </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
